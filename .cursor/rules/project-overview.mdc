@@ -1,0 +1,887 @@
+---
+alwaysApply: true
+---
+
+# LLM Shortcuts - Technical Documentation
+
+**A Chrome extension that enables developers and users to create reusable LLM prompt templates ("recipes") with predefined inputs, eliminating repetitive prompt engineering and context switching across AI chat sessions.**
+
+---
+
+## Overview
+
+LLM Shortcuts is a Chrome side panel extension that allows users to define, save, and execute parameterized LLM prompts as reusable templates. Instead of repeatedly opening new chat sessions and copy-pasting prompts, users create "recipes" once and invoke them with dynamic inputs through the extension interface.
+
+### Core Problem Solved
+
+Users frequently perform 4-5 repetitive AI tasks (e.g., email refinement, document generation) but face friction:
+- **Context pollution**: Reusing existing chats mixes unrelated conversation history
+- **Prompt drift**: Manual prompt entry leads to inconsistency
+- **Workflow overhead**: Opening new chats and retyping prompts wastes time
+
+### Example Use Cases
+
+- Email drafting and refinement
+- Document generation with specific formatting requirements
+- Code review or explanation requests
+- Content summarization with consistent output structure
+- Translation or tone adjustment tasks
+
+---
+
+## Core Concepts
+
+### Recipe
+
+A **recipe** is a reusable LLM prompt template consisting of:
+- **Name**: Human-readable identifier for quick access
+- **Description**: Context about the recipe's purpose
+- **Prompt Template**: The base instruction sent to the LLM (may include placeholders for dynamic input)
+- **Input Schema**: Defines required input types (text, image, or both)
+
+**Example Recipe:**
+```
+Name: Email Refiner
+Description: Converts draft emails into professional, concise communication
+Prompt: "Rewrite the following email draft to be more professional and concise while maintaining the core message: {user_input}"
+Input Type: Text
+```
+
+### Execution Flow
+
+1. User selects a recipe from the extension sidebar (The user can search too)
+2. Extension presents input fields based on the recipe's schema
+3. User provides dynamic input (e.g., draft email text)
+4. Extension interpolates input into the prompt template
+5. Prompt is sent to Chrome's Built-in AI Prompt API
+6. Response is displayed in the extension interface
+
+---
+
+## Architecture
+
+### Component Diagram
+
+```
+┌─────────────────────────────────────────┐
+│      Chrome Extension (Side Panel)      │
+│  ┌───────────────────────────────────┐  │
+│  │   Recipe Management UI            │  │
+│  │   - List/Search Recipes           │  │
+│  │   - Create/Edit Recipe Form       │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │   Recipe Execution UI             │  │
+│  │   - Input Form (Text/Image)       │  │
+│  │   - Response Display              │  │
+│  └───────────────────────────────────┘  │
+│                 ↓                        │
+│  ┌───────────────────────────────────┐  │
+│  │   Recipe Store (Local Storage)    │  │
+│  │   - CRUD operations for recipes   │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│   Chrome Built-in AI Prompt API         │
+│   (window.ai.languageModel)             │
+└─────────────────────────────────────────┘
+```
+
+### Key Components
+
+#### 1. Recipe Manager
+- **Responsibility**: CRUD operations for recipe templates
+- **Storage**: Chrome Local Storage API
+- **Data Model**:
+  ```
+  Recipe {
+    id: string (UUID)
+    name: string
+    description: string
+    prompt: string (LLM-enhanced version)
+    originalPrompt: string (user's original input)
+    inputType: "text" | "image" | "both"
+    createdAt: timestamp
+    lastUsedAt: timestamp
+  }
+  ```
+
+#### 2. Prompt Enhancer
+- **Responsibility**: Automatically improves user-provided prompts during recipe creation
+- **Process**: 
+  - Takes user's raw prompt input
+  - Sends enhancement request to Chrome AI API with meta-prompt
+  - Returns optimized prompt with better structure, clarity, and specificity
+- **Enhancement Criteria**: Improves prompt engineering best practices (clarity, context, constraints)
+
+#### 3. Prompt Executor
+- **Responsibility**: Interpolates user input into recipe prompts and invokes the AI API
+- **API Integration**: Chrome Built-in AI Prompt API
+- **Error Handling**: Manages API availability, quota limits, and timeout scenarios
+
+#### 4. Side Panel UI
+- **Responsibility**: Renders recipe list, creation forms, and execution interfaces
+- **Navigation States**:
+  - Home: Recipe list with search
+  - Create/Edit: Recipe configuration form
+  - Execute: Input form and response viewer
+
+---
+
+## Setup & Installation
+
+### Prerequisites
+
+- Chrome browser version 127+ (Prompt API availability)
+- Chrome flags enabled for AI features (during experimental phase):
+  - `chrome://flags/#optimization-guide-on-device-model`
+  - `chrome://flags/#prompt-api-for-gemini-nano`
+
+<!-- TODO: Document production availability timeline and flag requirements -->
+
+### Installation Steps
+
+1. Clone the repository or download the extension package
+2. Open Chrome and navigate to `chrome://extensions`
+3. Enable "Developer mode" (toggle in top-right corner)
+4. Click "Load unpacked" and select the extension directory
+5. The extension icon will appear in the toolbar; click to open the side panel
+
+### Development Setup
+
+<!-- TODO: Add development environment setup (npm install, build process) -->
+<!-- TODO: Document manifest.json configuration for side panel permissions -->
+
+---
+
+## Usage Guide
+
+### Creating a Recipe
+
+1. **Open the Extension**
+   - Click the LLM Shortcuts icon in the Chrome toolbar
+   - Side panel opens with the recipe list
+
+2. **Initiate Recipe Creation**
+   - Click the "New Recipe" button
+   - Recipe creation form appears
+
+3. **Configure Recipe Fields**
+   - **Name**: Short, descriptive identifier (e.g., "Email Refiner")
+   - **Description**: Explain the recipe's purpose and expected output
+   - **Prompt**: Write the LLM instruction
+     - Use `{user_input}` or similar placeholders for dynamic content
+     - Be specific about output format requirements
+     - **Note**: The system automatically enhances user-provided prompts using the LLM to improve clarity, specificity, and effectiveness before saving the recipe
+   - **Input Type**: Select from:
+     - **Text**: User provides plain text input
+     - **Image**: User uploads an image
+     - **Both**: User provides both text and image
+
+4. **Save Recipe**
+   - Click "Save" button
+   - Recipe appears in the main list
+
+**Example Prompt Templates:**
+
+```
+Use Case: Email Refinement
+Prompt: "Rewrite this email to be more professional and concise: {user_input}"
+Input Type: Text
+
+Use Case: Code Review
+Prompt: "Review the following code for bugs, performance issues, and best practices. Provide specific suggestions: {user_input}"
+Input Type: Text
+
+Use Case: Image Description
+Prompt: "Analyze this image and provide a detailed technical description suitable for accessibility alt text."
+Input Type: Image
+```
+
+### Executing a Recipe
+
+1. **Select Recipe**
+   - Browse the recipe list on the home screen
+   - Use the search bar to filter by name
+   - Click on the desired recipe
+
+2. **Provide Input**
+   - Recipe details (name, description) are displayed
+   - Input fields appear based on the recipe's input type:
+     - Text field for text input
+     - File upload for image input
+     - Both if configured
+
+3. **Submit Request**
+   - Enter or paste your input content
+   - Click the "Send" button
+
+4. **View Response**
+   - Extension displays the LLM-generated response
+   - Response can be copied to clipboard
+   <!-- TODO: Document response formatting options (plain text, markdown, etc.) -->
+
+---
+
+## Chrome Built-in AI Prompt API Integration
+
+### API Reference
+
+The extension uses the experimental Chrome Built-in AI Prompt API to run local LLM inference.
+
+**Key API Methods:**
+
+```
+// Check API availability
+const canUseAI = await window.ai.languageModel.capabilities();
+
+// Create a session
+const session = await window.ai.languageModel.create({
+  temperature: 0.7,
+  topK: 40
+});
+
+// Send prompt and get response
+const result = await session.prompt("Your prompt here");
+
+// Stream responses (if supported)
+const stream = session.promptStreaming("Your prompt here");
+for await (const chunk of stream) {
+  console.log(chunk);
+}
+
+// Clean up
+session.destroy();
+```
+
+### Implementation Considerations
+
+**Capabilities Check:**
+Always verify API availability before attempting to create a session:
+```
+if (!window.ai || !window.ai.languageModel) {
+  // Display error: "AI features not available in this browser version"
+}
+```
+
+**Session Management:**
+- Create a new session per recipe execution
+- Destroy sessions after receiving responses to free memory
+- Consider session reuse for multi-turn conversations (future enhancement)
+
+**Error Handling:**
+```
+try {
+  const session = await window.ai.languageModel.create();
+  const response = await session.prompt(interpolatedPrompt);
+  // Handle response
+} catch (error) {
+  if (error.name === "NotSupportedError") {
+    // API not available
+  } else if (error.name === "QuotaExceededError") {
+    // Rate limit reached
+  }
+  // Display user-friendly error
+}
+```
+
+<!-- TODO: Document specific error codes and retry strategies -->
+<!-- TODO: Clarify model parameters (temperature, topK) and their impact -->
+
+---
+
+## Best Practices
+
+### Recipe Design
+
+**Write Specific Prompts:**
+- ❌ Bad: "Make this better"
+- ✅ Good: "Rewrite this email to be more concise (under 100 words) while maintaining a professional tone"
+
+**Use Clear Input Markers:**
+- Include explicit delimiters in prompts: `"Summarize the following text: {user_input}"`
+- This helps the model distinguish instructions from user content
+
+**Test with Edge Cases:**
+- Empty input
+- Very long input (test token limits)
+- Special characters or formatting
+
+### Performance Optimization
+
+**Minimize Prompt Length:**
+- Avoid unnecessary verbosity in prompt templates
+- Longer prompts increase latency
+
+**Implement Response Streaming:**
+- Use `promptStreaming()` for better perceived performance
+- Display partial responses as they arrive
+
+**Cache Frequent Recipes:**
+- Preload commonly used recipes in memory
+- Reduce storage access latency
+
+### Security & Privacy
+
+**Input Sanitization:**
+- Validate user input before interpolation
+- Prevent prompt injection attacks
+<!-- TODO: Document specific sanitization techniques for prompt injection -->
+
+**Data Privacy:**
+- All processing happens locally via Chrome's on-device model
+- No data is sent to external servers
+- Clearly communicate this to users in UI
+
+**Storage Security:**
+- Recipes are stored in Chrome Local Storage (not synced by default)
+- Consider encryption for sensitive prompt templates
+<!-- TODO: Evaluate Chrome Sync API for optional recipe syncing -->
+
+---
+
+## Limitations & Known Issues
+
+### API Limitations
+
+- **Browser Support**: Only Chrome 127+ with experimental flags enabled
+- **Model Size**: Limited by on-device model capabilities (not GPT-4 class)
+- **Token Limits**: Input + output capped at model's context window
+  <!-- TODO: Document specific token limits for Chrome's Gemini Nano model -->
+- **No Internet Access**: Model cannot fetch real-time data or browse URLs
+
+### Feature Constraints
+
+- **No Conversation History**: Each recipe execution is stateless
+- **Image Input**: Support depends on Chrome API roadmap (may not be available initially)
+  <!-- TODO: Verify image input support in current Prompt API spec -->
+- **No Custom Models**: Cannot use OpenAI, Anthropic, or other external LLM providers
+
+### UX Considerations
+
+- **API Availability**: Users on older Chrome versions will see error messages
+- **Cold Start**: First invocation may have higher latency as model loads
+- **Offline Only**: Requires local model download (initial setup may take time)
+- **UI design**: Use ShadCN design style for the UI
+
+---
+
+## Roadmap & Future Enhancements
+
+<!-- TODO: Add version numbering and planned features -->
+
+**Potential Features:**
+- Recipe sharing/import via JSON export
+- Conversation threading (multi-turn interactions per recipe)
+- Response history and favorites
+- Keyboard shortcuts for quick recipe access
+- Integration with external LLM APIs (OpenAI, Anthropic) as fallback
+- Recipe templates marketplace or community repository
+
+---
+
+## Development Implementation Plan
+
+The following phases break down the technical development work into logical stages with clear dependencies. Each phase represents a buildable, testable increment of functionality.
+
+### Phase 1: Project Setup & Chrome AI Integration (Foundation)
+**Goal**: Establish project structure and validate Chrome Built-in AI API integration
+
+**Technical Tasks:**
+- Initialize Chrome extension project with manifest v3 configuration
+- Configure side panel permissions and Chrome APIs
+- Set up TypeScript compilation pipeline
+- Create basic extension file structure (background, content, side panel)
+- Implement Chrome Built-in AI Prompt API wrapper
+  - API availability detection
+  - Session lifecycle management (create, destroy)
+  - Basic error handling for API failures
+- Test API capabilities and document limitations (token limits, latency)
+- Create development build script with hot reload
+
+**Deliverables:**
+- `manifest.json` with side panel and AI API permissions
+- Basic TypeScript project structure
+- Working AI API client module
+- Development environment with reload capability
+
+**Dependencies:** None
+
+**Technical Validation:**
+- Side panel opens successfully
+- `window.ai.languageModel.capabilities()` returns valid data
+- Can create session and execute basic prompts
+- Error handling works for unsupported browsers
+
+---
+
+### Phase 2: Data Layer & Storage (Core Infrastructure)
+**Goal**: Build data models and persistence layer
+
+**Technical Tasks:**
+- Define TypeScript interfaces for Recipe model
+  ```
+  Recipe: id, name, description, prompt, originalPrompt, 
+          inputType, createdAt, lastUsedAt
+  ```
+- Implement Chrome Storage API wrapper with async/await
+- Build Recipe Manager module:
+  - Create recipe
+  - Read recipes (single, all, search)
+  - Update recipe
+  - Delete recipe
+- Implement data validation logic
+- Add UUID generation for recipe IDs
+- Create storage migration strategy (version handling)
+- Write unit tests for storage operations
+
+**Deliverables:**
+- Recipe TypeScript interfaces/types
+- Storage service module with CRUD operations
+- Recipe Manager service
+- Unit tests for data layer
+
+**Dependencies:** Phase 1 complete
+
+**Technical Validation:**
+- Recipes persist across extension reloads
+- Storage API handles concurrent operations correctly
+- Data validation prevents corrupted state
+- Unit tests pass with 100% coverage
+
+---
+
+### Phase 3: UI Foundation & Recipe List (Basic UI)
+**Goal**: Build side panel interface and recipe browsing
+
+**Technical Tasks:**
+- Create side panel HTML structure
+- Implement CSS styling system (consider utility classes or CSS modules)
+- Build recipe list rendering logic
+  - Display all recipes with name, description, last used
+  - Empty state when no recipes exist
+- Implement search/filter functionality
+  - Real-time filtering by recipe name
+  - Debounced input for performance
+- Add recipe sorting (by name, date created, last used)
+- Create loading states and skeleton screens
+- Implement event delegation for list interactions
+- Wire up storage layer to populate UI
+
+**Deliverables:**
+- Styled side panel with recipe list view
+- Search and filter UI components
+- Loading and empty states
+- Event handlers for recipe selection
+
+**Dependencies:** Phase 2 complete (needs storage layer)
+
+**Technical Validation:**
+- Recipe list updates reactively when storage changes
+- Search filters work correctly with special characters
+- Performance is acceptable with 50+ recipes
+- UI state persists correctly (scroll position, search term)
+
+---
+
+### Phase 4: Recipe Execution Engine (Core Feature)
+**Goal**: Enable users to run recipes and see AI responses
+
+**Technical Tasks:**
+- Build recipe execution UI
+  - Display recipe name and description
+  - Render input form based on `inputType` (text, image, both)
+  - Add submit button and loading state
+  - Create response display area
+- Implement prompt interpolation logic
+  - Replace placeholders (e.g., `{user_input}`) with user data
+  - Handle multiple placeholders
+  - Sanitize inputs to prevent prompt injection
+- Build prompt executor service
+  - Create AI session for execution
+  - Send interpolated prompt
+  - Handle streaming responses (character-by-character)
+  - Destroy session after completion
+- Implement error handling for execution failures
+  - API unavailable
+  - Timeout errors
+  - Quota exceeded
+- Add copy-to-clipboard for responses
+- Update recipe `lastUsedAt` timestamp after execution
+
+**Deliverables:**
+- Recipe execution UI with input forms
+- Prompt interpolation engine
+- Streaming response renderer
+- Error handling with user-friendly messages
+
+**Dependencies:** Phase 3 complete (needs UI framework), Phase 2 (needs Recipe Manager)
+
+**Technical Validation:**
+- Text input executes and displays responses correctly
+- Streaming renders progressively without blocking
+- Error states display helpful messages
+- `lastUsedAt` updates in storage after execution
+- Prompt injection attempts are sanitized
+
+---
+
+### Phase 5: Recipe Creation & Editing (CRUD UI)
+**Goal**: Allow users to create, edit, and delete recipes
+
+**Technical Tasks:**
+- Build recipe creation form UI
+  - Input fields: name, description, prompt, inputType
+  - Form validation (required fields, character limits)
+  - Submit and cancel buttons
+- Implement form state management
+  - Track input changes
+  - Validation feedback (inline errors)
+  - Disable submit until valid
+- Wire form submission to Recipe Manager
+- Build recipe editing flow
+  - Load existing recipe data into form
+  - Update vs. Create logic
+- Implement recipe deletion
+  - Confirmation dialog before delete
+  - Remove from storage
+  - Navigate back to list
+- Add navigation between views (list ↔ create/edit ↔ execute)
+- Implement routing or view state management
+
+**Deliverables:**
+- Recipe creation/edit form with validation
+- Delete functionality with confirmation
+- Navigation system for multi-view side panel
+- Form state management
+
+**Dependencies:** Phase 4 complete (needs execution UI as navigation target)
+
+**Technical Validation:**
+- Form validation prevents invalid recipes
+- Edit preserves all recipe fields correctly
+- Delete removes recipe and updates UI
+- Navigation maintains state appropriately
+- Form resets after successful creation
+
+---
+
+### Phase 6: Prompt Enhancement Feature (AI-Powered Enhancement)
+**Goal**: Automatically improve user-written prompts using LLM
+
+**Technical Tasks:**
+- Design and test meta-prompt for prompt enhancement
+  - Experiments with different enhancement instructions
+  - Validate that placeholders (e.g., `{user_input}`) are preserved
+  - Ensure enhanced prompts maintain original intent
+- Implement Prompt Enhancer service
+  - Accept raw user prompt
+  - Send enhancement request to AI API with meta-prompt
+  - Return enhanced prompt
+  - Handle enhancement failures (return original prompt)
+- Add "Enhance Prompt" UI to recipe form
+  - Button to trigger enhancement
+  - Show loading state during enhancement
+  - Display original vs. enhanced prompt comparison
+  - Allow user to accept or discard enhancement
+- Store both `originalPrompt` and enhanced `prompt` in Recipe model
+- Add toggle to view/edit original vs. enhanced prompt
+
+**Deliverables:**
+- Prompt Enhancer service module
+- Tested and tuned meta-prompt
+- Enhancement UI in recipe form
+- Before/after comparison display
+
+**Dependencies:** Phase 5 complete (needs recipe form), Phase 2 (AI client)
+
+**Technical Validation:**
+- Enhancement preserves placeholder syntax
+- Enhanced prompts are measurably more effective
+- UI clearly shows before/after
+- Failures gracefully fall back to original prompt
+- Enhancement works within API token limits
+
+---
+
+### Phase 7: Advanced Execution Features (UX Improvements)
+**Goal**: Improve execution performance and user experience
+
+**Technical Tasks:**
+- Implement response streaming with progressive rendering
+  - Display tokens as they arrive
+  - Handle stream errors gracefully
+  - Show "typing" indicator during streaming
+- Add response formatting
+  - Markdown rendering if applicable
+  - Code syntax highlighting
+  - Preserve whitespace and formatting
+- Implement response history (optional, in-memory only)
+  - Store last N responses per recipe
+  - Add history navigation in execution UI
+- Add keyboard shortcuts
+  - `Ctrl/Cmd + K` for search focus
+  - `Esc` to close dialogs
+  - `Enter` to submit forms
+- Implement optimistic UI updates
+  - Immediately show user input in UI before API call
+  - Show loading state without blocking interaction
+- Add recipe execution analytics tracking (local only)
+  - Count executions per recipe
+  - Track average response time
+  - Display in recipe list or details
+
+**Deliverables:**
+- Streaming response UI with progressive rendering
+- Markdown/code formatting support
+- Keyboard shortcuts
+- Response history (optional)
+- Performance optimizations
+
+**Dependencies:** Phase 6 complete
+
+**Technical Validation:**
+- Streaming renders smoothly without jank
+- Keyboard shortcuts work across all views
+- Response formatting handles edge cases (very long code, nested markdown)
+- Performance is acceptable with large responses (10k+ tokens)
+
+---
+
+### Phase 8: Data Management Features (Import/Export & Organization)
+**Goal**: Enable recipe portability and organization
+
+**Technical Tasks:**
+- Implement recipe export functionality
+  - Serialize single recipe to JSON
+  - Export all recipes to JSON file
+  - Add download trigger in UI
+- Implement recipe import functionality
+  - File upload handling
+  - JSON parsing and validation
+  - Merge strategy (overwrite vs. create new)
+  - Handle import errors (invalid JSON, schema mismatch)
+- Add recipe duplication feature
+  - Clone recipe with new ID
+  - Append "(Copy)" to name
+- Implement recipe categories/tags (optional)
+  - Add `tags` field to Recipe model
+  - Tag input UI (autocomplete or manual entry)
+  - Filter by tags in recipe list
+- Add favorite/pin functionality
+  - Add `pinned` boolean to Recipe model
+  - Display pinned recipes at top of list
+  - Toggle pin state in UI
+
+**Deliverables:**
+- Import/export functionality with JSON format
+- Recipe duplication
+- Tags/categories (optional)
+- Favorite/pin feature
+
+**Dependencies:** Phase 7 complete
+
+**Technical Validation:**
+- Exported JSON is valid and readable
+- Import handles malformed data gracefully
+- Duplicate creates independent copy
+- Tags filter correctly
+- Pinned recipes persist across sessions
+
+---
+
+### Phase 9: Error Handling & Edge Cases (Robustness)
+**Goal**: Harden application against errors and edge cases
+
+**Technical Tasks:**
+- Implement comprehensive error boundaries
+  - Catch and display storage errors
+  - Handle AI API quota exceeded
+  - Recover from corrupted storage data
+- Add retry logic for transient failures
+  - Exponential backoff for API calls
+  - Retry button in error states
+- Handle edge cases:
+  - Very long prompts (near token limit)
+  - Special characters in recipe names/prompts
+  - Empty recipe list scenarios
+  - Concurrent storage writes
+  - Browser memory constraints
+- Implement data validation at all boundaries
+  - Validate imported JSON schema
+  - Sanitize user inputs before storage
+  - Validate API responses
+- Add logging system for debugging
+  - Console logging for development
+  - Error reporting structure (no external services)
+- Create fallback UI for catastrophic failures
+  - "Something went wrong" screen
+  - Clear cache/reset button
+
+**Deliverables:**
+- Comprehensive error handling
+- Retry mechanisms
+- Edge case handling
+- Validation at all input points
+- Logging infrastructure
+
+**Dependencies:** Phase 8 complete
+
+**Technical Validation:**
+- All error states display helpful messages
+- Application recovers from corrupted data
+- Quota exceeded handled gracefully
+- No unhandled promise rejections
+- Edge cases tested and working
+
+---
+
+### Phase 10: Testing & Documentation (Quality Assurance)
+**Goal**: Ensure code quality and maintainability
+
+**Technical Tasks:**
+- Write unit tests for all services
+  - Storage layer: 100% coverage
+  - Recipe Manager: all CRUD operations
+  - Prompt interpolation: edge cases
+  - Prompt enhancer: meta-prompt validation
+- Write integration tests
+  - Recipe creation → execution flow
+  - Import → export round-trip
+  - Search/filter functionality
+- Create end-to-end test scenarios
+  - New user onboarding
+  - Power user workflows
+  - Error recovery scenarios
+- Document code with JSDoc/TSDoc comments
+  - All public APIs
+  - Complex algorithms
+  - Data structures
+- Create developer documentation
+  - Architecture overview
+  - Module responsibilities
+  - Build and deployment instructions
+  - Contributing guidelines
+- Perform manual QA testing
+  - Cross-browser testing (Chrome versions)
+  - Performance profiling
+  - Accessibility audit (keyboard navigation, screen readers)
+
+**Deliverables:**
+- Unit test suite with >80% coverage
+- Integration tests for critical flows
+- E2E test scenarios
+- Inline code documentation
+- Developer README
+
+**Dependencies:** Phase 9 complete
+
+**Technical Validation:**
+- All tests pass consistently
+- Coverage meets threshold
+- Documentation is accurate and helpful
+- No console errors or warnings
+- Performance benchmarks met (<500ms for common operations)
+
+---
+
+### Development Phase Dependencies
+
+```
+Phase 1 (Project Setup)
+    ↓
+Phase 2 (Data Layer) ← Must complete before UI
+    ↓
+Phase 3 (UI Foundation) ← Can display data
+    ↓
+Phase 4 (Execution Engine) ← Can run recipes
+    ↓
+Phase 5 (Recipe CRUD) ← Can create/edit recipes
+    ↓
+Phase 6 (Prompt Enhancement) ← Uses AI + Form UI
+    ↓
+Phase 7 (Advanced Execution) ← Improves UX
+    ↓
+Phase 8 (Data Management) ← Portability features
+    ↓
+Phase 9 (Error Handling) ← Hardening
+    ↓
+Phase 10 (Testing & Docs) ← Quality gate
+```
+
+**Minimum Viable Product (MVP)**: Phases 1-6  
+**Feature Complete**: Phases 1-8  
+**Production Ready**: Phases 1-10
+
+---
+
+## Technical Architecture Reference
+
+### Module Structure
+```
+/src
+  /core
+    ai-client.ts              // Phase 1: Chrome AI API wrapper
+    storage.ts                // Phase 2: Chrome Storage wrapper
+    recipe-manager.ts         // Phase 2: CRUD operations
+    prompt-executor.ts        // Phase 4: Execution engine
+    prompt-enhancer.ts        // Phase 6: Enhancement service
+  /models
+    recipe.model.ts           // Phase 2: TypeScript interfaces
+  /ui
+    panel.html                // Phase 3: Side panel markup
+    panel.css                 // Phase 3: Styles
+    panel.ts                  // Phase 3: UI controller
+  /components
+    recipe-list.ts            // Phase 3: List rendering
+    recipe-form.ts            // Phase 5: Create/edit form
+    recipe-executor.ts        // Phase 4: Execution UI
+    search-bar.ts             // Phase 3: Search component
+  /utils
+    prompt-interpolation.ts   // Phase 4: Replace placeholders
+    validation.ts             // Phase 5: Form validation
+    error-handler.ts          // Phase 9: Error utilities
+    keyboard-shortcuts.ts     // Phase 7: Shortcuts
+  /tests
+    unit/                     // Phase 10
+    integration/              // Phase 10
+  background.ts               // Phase 1: Service worker
+  manifest.json               // Phase 1: Extension config
+```
+
+### Key Technical Decisions
+
+**Why Chrome Storage API over IndexedDB?**
+- Simpler API for key-value storage
+- Automatic serialization
+- Extension-specific optimizations
+- Sufficient for recipe data volume
+
+**Why no state management library (Redux, Zustand)?**
+- Extension is small enough for vanilla JS state
+- Reduces bundle size and complexity
+- Chrome Storage provides persistence
+- Can refactor later if needed
+
+**Why TypeScript?**
+- Type safety for Recipe model
+- Better IDE support
+- Catches errors at compile time
+- Self-documenting code
+
+**Why no build framework (React, Vue)?**
+- Vanilla JS is sufficient for UI complexity
+- Faster load times in side panel
+- Fewer dependencies
+- Easier debugging in extension context
+
+---
+
+## References
+
+- [Chrome Built-in AI Prompt API Documentation](https://developer.chrome.com/docs/ai/prompt-api)
+- [Chrome Extensions Side Panel API](https://developer.chrome.com/docs/extensions/reference/sidePanel/)
+- [Chrome Local Storage API](https://developer.chrome.com/docs/extensions/reference/storage/)
+
+---

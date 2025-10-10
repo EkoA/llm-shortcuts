@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Shortcuts</title>
+    <link rel="stylesheet" href="sidepanel.css">
+</head>
+
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>LLM Shortcuts</h1>
+            <p class="subtitle">Reusable AI prompt templates</p>
+        </header>
+
+        <main class="main">
+            <!-- AI Availability Check -->
+            <div id="ai-status" class="ai-status">
+                <div class="loading">Checking AI availability...</div>
+            </div>
+
+            <!-- Recipe List (will be populated by JavaScript) -->
+            <div id="recipe-list" class="recipe-list" style="display: none;">
+                <div class="empty-state">
+                    <h3>No recipes yet</h3>
+                    <p>Create your first recipe to get started!</p>
+                    <button id="create-recipe-btn" class="btn btn-primary">Create Recipe</button>
+                </div>
+            </div>
+
+            <!-- Recipe Creation Form (hidden by default) -->
+            <div id="recipe-form" class="recipe-form" style="display: none;">
+                <h2>Create New Recipe</h2>
+                <form id="recipe-form-element">
+                    <div class="form-group">
+                        <label for="recipe-name">Name</label>
+                        <input type="text" id="recipe-name" name="name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipe-description">Description</label>
+                        <textarea id="recipe-description" name="description" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipe-prompt">Prompt Template</label>
+                        <textarea id="recipe-prompt" name="prompt" rows="5" required
+                            placeholder="Enter your prompt template. Use {user_input} for dynamic content."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipe-input-type">Input Type</label>
+                        <select id="recipe-input-type" name="inputType" required>
+                            <option value="text">Text</option>
+                            <option value="image">Image</option>
+                            <option value="both">Both Text and Image</option>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="cancel-recipe" class="btn btn-secondary">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Recipe</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Recipe Execution (hidden by default) -->
+            <div id="recipe-execution" class="recipe-execution" style="display: none;">
+                <div class="execution-header">
+                    <button id="back-to-list" class="btn btn-secondary">← Back</button>
+                    <h2 id="execution-recipe-name">Recipe Name</h2>
+                </div>
+
+                <div class="execution-content">
+                    <p id="execution-recipe-description">Recipe description</p>
+
+                    <div class="input-section">
+                        <label for="user-input">Your Input</label>
+                        <textarea id="user-input" rows="4" placeholder="Enter your input here..."></textarea>
+                    </div>
+
+                    <div class="input-section" id="image-input-section" style="display: none;">
+                        <label for="image-input">Image (optional)</label>
+                        <input type="file" id="image-input" accept="image/*">
+                    </div>
+
+                    <button id="execute-recipe" class="btn btn-primary">Execute Recipe</button>
+                </div>
+
+                <div id="execution-result" class="execution-result" style="display: none;">
+                    <div class="result-header">
+                        <h3>Result</h3>
+                        <div class="result-actions">
+                            <button id="copy-result" class="btn btn-secondary">Copy Result</button>
+                            <button id="clear-result" class="btn btn-secondary">Clear</button>
+                        </div>
+                    </div>
+                    <div id="result-content" class="result-content"></div>
+                    <div id="execution-stats" class="execution-stats" style="display: none;">
+                        <small>Execution time: <span id="execution-time">-</span>ms</small>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Load bundled sidepanel with all dependencies -->
+    <script src="sidepanel-bundled.js"></script>
+</body>
+
+</html>

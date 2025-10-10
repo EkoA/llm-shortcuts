@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "LLM Shortcuts (Dev)",
+  "version": "1.0.0",
+  "description": "A Chrome extension that enables developers and users to create reusable LLM prompt templates with predefined inputs.",
+  "permissions": [
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open LLM Shortcuts"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "minimum_chrome_version": "127"
+}
