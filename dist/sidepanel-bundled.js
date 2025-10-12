@@ -1532,9 +1532,14 @@ class PromptExecutor {
                 throw new PromptExecutorError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE');
             }
             // Interpolate prompt with user input
+            console.log('=== PROMPT EXECUTOR DEBUG ===');
+            console.log('Recipe prompt template:', recipe.prompt);
+            console.log('User input:', userInput);
+            console.log('User input type:', typeof userInput);
             const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, options.sanitization);
             console.log('Executing recipe:', recipe.name);
             console.log('Interpolated prompt:', interpolatedPrompt);
+            console.log('Interpolation successful:', interpolatedPrompt !== recipe.prompt);
             // Execute prompt
             const response = await this.aiClient.executePrompt(interpolatedPrompt, {
                 temperature: options.temperature ?? 0.7,
@@ -1784,6 +1789,8 @@ let promptExecutor = null;
 let currentRecipes = [];
 let currentRecipe = null;
 let isExecuting = false;
+let editingRecipeId = null;
+let formValidationState = {};
 /**
  * Initialize the side panel
  */
@@ -1793,6 +1800,13 @@ async function initialize() {
     recipeManager = new RecipeManager();
     // Initialize prompt executor
     promptExecutor = getPromptExecutor();
+    // Test interpolation function
+    testInterpolation();
+    // Check recipe placeholders
+    await checkRecipePlaceholders();
+    // Make test functions available globally for debugging
+    window.testInterpolation = testInterpolation;
+    window.checkRecipePlaceholders = checkRecipePlaceholders;
     // Debug: Check if AI client functions are loaded
     console.log('AI Client loaded. Functions available:');
     console.log('isAIAvailable:', typeof isAIAvailable);
@@ -1907,8 +1921,26 @@ function showRecipeForm() {
     recipeListEl.style.display = 'none';
     recipeFormEl.style.display = 'block';
     recipeExecutionEl.style.display = 'none';
-    // Reset form
+    // Reset form and state
+    editingRecipeId = null;
+    formValidationState = {};
     recipeForm.reset();
+    // Update form title
+    const formTitle = document.querySelector('#recipe-form h2');
+    if (formTitle) {
+        formTitle.textContent = 'Create New Recipe';
+    }
+    // Update submit button
+    const submitBtn = recipeForm.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.textContent = 'Save Recipe';
+    }
+    // Clear any validation errors
+    clearFormValidationErrors();
+    // Set up real-time validation
+    setupFormValidation();
+    // Initialize submit button state
+    updateSubmitButtonState();
 }
 /**
  * Hide recipe creation form
@@ -1921,6 +1953,10 @@ function hideRecipeForm() {
  */
 async function handleRecipeSubmit(event) {
     event.preventDefault();
+    // Validate form before submission
+    if (!validateForm()) {
+        return;
+    }
     const formData = new FormData(recipeForm);
     const recipeData = {
         name: formData.get('name'),
@@ -1930,19 +1966,36 @@ async function handleRecipeSubmit(event) {
         inputType: formData.get('inputType')
     };
     try {
-        console.log('Creating recipe:', recipeData);
-        // Create recipe using recipe manager
-        const recipe = await recipeManager.createRecipe(recipeData);
-        console.log('Recipe created successfully:', recipe.id);
-        // Reload recipes and show list
-        await loadRecipes();
-        showRecipeList();
-        // Show success message
-        alert('Recipe created successfully!');
+        if (editingRecipeId) {
+            // Update existing recipe
+            console.log('Updating recipe:', editingRecipeId, recipeData);
+            const updateData = {
+                id: editingRecipeId,
+                ...recipeData
+            };
+            const recipe = await recipeManager.updateRecipe(updateData);
+            console.log('Recipe updated successfully:', recipe.id);
+            // Reload recipes and show list
+            await loadRecipes();
+            showRecipeList();
+            // Show success message
+            alert('Recipe updated successfully!');
+        }
+        else {
+            // Create new recipe
+            console.log('Creating recipe:', recipeData);
+            const recipe = await recipeManager.createRecipe(recipeData);
+            console.log('Recipe created successfully:', recipe.id);
+            // Reload recipes and show list
+            await loadRecipes();
+            showRecipeList();
+            // Show success message
+            alert('Recipe created successfully!');
+        }
     }
     catch (error) {
-        console.error('Failed to create recipe:', error);
-        alert(`Failed to create recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error('Failed to save recipe:', error);
+        alert(`Failed to save recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
 /**
@@ -1987,7 +2040,11 @@ async function handleRecipeExecution() {
     resultContentEl.textContent = '';
     document.getElementById('execution-result').style.display = 'none';
     try {
+        console.log('=== RECIPE EXECUTION DEBUG ===');
         console.log('Executing recipe:', currentRecipe.name);
+        console.log('Recipe prompt template:', currentRecipe.prompt);
+        console.log('User input collected:', userInput);
+        console.log('User input length:', userInput.length);
         // Execute recipe with streaming
         const result = await executeRecipeWithStreaming(currentRecipe, userInput);
         if (result.success) {
@@ -2037,8 +2094,25 @@ async function executeRecipeWithStreaming(recipe, userInput) {
 async function executeWithContentScript(recipe, userInput) {
     try {
         console.log('Executing recipe via direct AI access:', recipe.name);
-        // Interpolate the prompt with user input
-        const interpolatedPrompt = recipe.prompt.replace('{user_input}', userInput);
+        // Use proper prompt interpolation with sanitization
+        console.log('=== INTERPOLATION DEBUG ===');
+        console.log('Original prompt template:', recipe.prompt);
+        console.log('User input to interpolate:', userInput);
+        console.log('User input type:', typeof userInput);
+        let interpolatedPrompt;
+        try {
+            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+                maxLength: 10000,
+                allowHtml: false,
+                escapeSpecialChars: true
+            });
+            console.log('Interpolated prompt result:', interpolatedPrompt);
+            console.log('Interpolation successful:', interpolatedPrompt !== recipe.prompt);
+        }
+        catch (interpolationError) {
+            console.error('Interpolation failed:', interpolationError);
+            throw new Error(`Failed to interpolate prompt: ${interpolationError instanceof Error ? interpolationError.message : 'Unknown error'}`);
+        }
         // Check if AI is available
         const aiWindow = window;
         if (!aiWindow.LanguageModel) {
@@ -2089,6 +2163,53 @@ function showExecutionError(errorMessage) {
 function retryExecution() {
     if (currentRecipe && !isExecuting) {
         handleRecipeExecution();
+    }
+}
+/**
+ * Test interpolation function (for debugging)
+ */
+function testInterpolation() {
+    console.log('=== TESTING INTERPOLATION ===');
+    const testTemplate = "Rewrite this email to be more professional: {user_input}";
+    const testInput = "Hey, can we meet tomorrow?";
+    try {
+        const result = interpolatePrompt(testTemplate, testInput);
+        console.log('Test template:', testTemplate);
+        console.log('Test input:', testInput);
+        console.log('Test result:', result);
+        console.log('Test successful:', result.includes(testInput));
+    }
+    catch (error) {
+        console.error('Test interpolation failed:', error);
+    }
+}
+/**
+ * Check recipe placeholders (for debugging)
+ */
+async function checkRecipePlaceholders() {
+    console.log('=== CHECKING RECIPE PLACEHOLDERS ===');
+    try {
+        const recipes = await recipeManager.getAllRecipes();
+        console.log('Total recipes:', recipes.length);
+        recipes.forEach((recipe, index) => {
+            console.log(`Recipe ${index + 1}: ${recipe.name}`);
+            console.log(`  Prompt: ${recipe.prompt}`);
+            // Check for placeholders
+            const placeholders = recipe.prompt.match(/\{[^}]+\}/g);
+            console.log(`  Placeholders found:`, placeholders || 'None');
+            // Test interpolation with dummy input
+            try {
+                const testResult = interpolatePrompt(recipe.prompt, 'TEST_INPUT');
+                console.log(`  Interpolation test: ${testResult.includes('TEST_INPUT') ? 'SUCCESS' : 'FAILED'}`);
+            }
+            catch (error) {
+                console.log(`  Interpolation test: FAILED - ${error}`);
+            }
+            console.log('---');
+        });
+    }
+    catch (error) {
+        console.error('Failed to check recipe placeholders:', error);
     }
 }
 /**
@@ -2353,8 +2474,29 @@ async function editRecipe(recipeId) {
             alert('Recipe not found');
             return;
         }
-        // TODO: Implement edit functionality in Phase 5
-        alert('Edit functionality will be implemented in Phase 5');
+        // Set editing state
+        editingRecipeId = recipeId;
+        // Show form
+        recipeListEl.style.display = 'none';
+        recipeFormEl.style.display = 'block';
+        recipeExecutionEl.style.display = 'none';
+        // Update form title
+        const formTitle = document.querySelector('#recipe-form h2');
+        if (formTitle) {
+            formTitle.textContent = 'Edit Recipe';
+        }
+        // Update submit button
+        const submitBtn = recipeForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.textContent = 'Update Recipe';
+        }
+        // Populate form with existing data
+        populateFormWithRecipe(recipe);
+        // Clear validation errors and set up validation
+        clearFormValidationErrors();
+        setupFormValidation();
+        // Initialize submit button state
+        updateSubmitButtonState();
     }
     catch (error) {
         console.error('Failed to load recipe for editing:', error);
@@ -2453,6 +2595,192 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
     };
+}
+/**
+ * Populate form with recipe data for editing
+ */
+function populateFormWithRecipe(recipe) {
+    const nameInput = document.getElementById('recipe-name');
+    const descriptionInput = document.getElementById('recipe-description');
+    const promptInput = document.getElementById('recipe-prompt');
+    const inputTypeSelect = document.getElementById('recipe-input-type');
+    if (nameInput)
+        nameInput.value = recipe.name;
+    if (descriptionInput)
+        descriptionInput.value = recipe.description;
+    if (promptInput)
+        promptInput.value = recipe.prompt;
+    if (inputTypeSelect)
+        inputTypeSelect.value = recipe.inputType;
+    // Trigger input type change to show/hide image section
+    if (inputTypeSelect) {
+        const event = new Event('change');
+        Object.defineProperty(event, 'target', { value: inputTypeSelect });
+        handleInputTypeChange(event);
+    }
+}
+/**
+ * Set up real-time form validation
+ */
+function setupFormValidation() {
+    const nameInput = document.getElementById('recipe-name');
+    const descriptionInput = document.getElementById('recipe-description');
+    const promptInput = document.getElementById('recipe-prompt');
+    const inputTypeSelect = document.getElementById('recipe-input-type');
+    // Add event listeners for real-time validation
+    if (nameInput) {
+        nameInput.addEventListener('input', () => validateField('name', nameInput.value));
+        nameInput.addEventListener('blur', () => validateField('name', nameInput.value));
+    }
+    if (descriptionInput) {
+        descriptionInput.addEventListener('input', () => validateField('description', descriptionInput.value));
+        descriptionInput.addEventListener('blur', () => validateField('description', descriptionInput.value));
+    }
+    if (promptInput) {
+        promptInput.addEventListener('input', () => validateField('prompt', promptInput.value));
+        promptInput.addEventListener('blur', () => validateField('prompt', promptInput.value));
+    }
+    if (inputTypeSelect) {
+        inputTypeSelect.addEventListener('change', () => validateField('inputType', inputTypeSelect.value));
+    }
+}
+/**
+ * Validate a single form field
+ */
+function validateField(fieldName, value) {
+    let isValid = true;
+    let errorMessage = '';
+    switch (fieldName) {
+        case 'name':
+            if (!value || value.trim().length === 0) {
+                isValid = false;
+                errorMessage = 'Name is required';
+            }
+            else if (value.trim().length < 1) {
+                isValid = false;
+                errorMessage = 'Name must be at least 1 character long';
+            }
+            else if (value.trim().length > 100) {
+                isValid = false;
+                errorMessage = 'Name must be no more than 100 characters long';
+            }
+            break;
+        case 'description':
+            if (!value || value.trim().length === 0) {
+                isValid = false;
+                errorMessage = 'Description is required';
+            }
+            else if (value.trim().length > 500) {
+                isValid = false;
+                errorMessage = 'Description must be no more than 500 characters long';
+            }
+            break;
+        case 'prompt':
+            if (!value || value.trim().length === 0) {
+                isValid = false;
+                errorMessage = 'Prompt is required';
+            }
+            else if (value.trim().length < 1) {
+                isValid = false;
+                errorMessage = 'Prompt must be at least 1 character long';
+            }
+            else if (value.trim().length > 10000) {
+                isValid = false;
+                errorMessage = 'Prompt must be no more than 10,000 characters long';
+            }
+            break;
+        case 'inputType':
+            const validTypes = ['text', 'image', 'both'];
+            if (!validTypes.includes(value)) {
+                isValid = false;
+                errorMessage = 'Please select a valid input type';
+            }
+            break;
+    }
+    // Update validation state
+    formValidationState[fieldName] = isValid;
+    // Show/hide error message
+    showFieldValidationError(fieldName, isValid, errorMessage);
+    // Update submit button state
+    updateSubmitButtonState();
+    return isValid;
+}
+/**
+ * Show field validation error
+ */
+function showFieldValidationError(fieldName, isValid, errorMessage) {
+    const field = document.getElementById(`recipe-${fieldName}`);
+    if (!field)
+        return;
+    // Remove existing error message
+    const existingError = field.parentElement?.querySelector('.field-error');
+    if (existingError) {
+        existingError.remove();
+    }
+    // Remove error styling
+    field.classList.remove('error');
+    if (!isValid && errorMessage) {
+        // Add error styling
+        field.classList.add('error');
+        // Add error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'field-error';
+        errorDiv.textContent = errorMessage;
+        field.parentElement?.appendChild(errorDiv);
+    }
+}
+/**
+ * Clear all form validation errors
+ */
+function clearFormValidationErrors() {
+    const fields = ['name', 'description', 'prompt', 'inputType'];
+    fields.forEach(fieldName => {
+        const field = document.getElementById(`recipe-${fieldName}`);
+        if (field) {
+            field.classList.remove('error');
+            const existingError = field.parentElement?.querySelector('.field-error');
+            if (existingError) {
+                existingError.remove();
+            }
+        }
+    });
+}
+/**
+ * Validate entire form
+ */
+function validateForm() {
+    const nameInput = document.getElementById('recipe-name');
+    const descriptionInput = document.getElementById('recipe-description');
+    const promptInput = document.getElementById('recipe-prompt');
+    const inputTypeSelect = document.getElementById('recipe-input-type');
+    const nameValid = validateField('name', nameInput?.value || '');
+    const descriptionValid = validateField('description', descriptionInput?.value || '');
+    const promptValid = validateField('prompt', promptInput?.value || '');
+    const inputTypeValid = validateField('inputType', inputTypeSelect?.value || '');
+    return nameValid && descriptionValid && promptValid && inputTypeValid;
+}
+/**
+ * Update submit button state based on validation
+ */
+function updateSubmitButtonState() {
+    const submitBtn = recipeForm.querySelector('button[type="submit"]');
+    if (!submitBtn)
+        return;
+    // Get current form values
+    const nameInput = document.getElementById('recipe-name');
+    const descriptionInput = document.getElementById('recipe-description');
+    const promptInput = document.getElementById('recipe-prompt');
+    const inputTypeSelect = document.getElementById('recipe-input-type');
+    // Check if all required fields have values
+    const hasName = nameInput?.value.trim().length > 0;
+    const hasDescription = descriptionInput?.value.trim().length > 0;
+    const hasPrompt = promptInput?.value.trim().length > 0;
+    const hasInputType = inputTypeSelect?.value && inputTypeSelect.value !== '';
+    // Check if any field has validation errors (only if validation state exists)
+    const hasValidationErrors = Object.keys(formValidationState).length > 0 &&
+        Object.values(formValidationState).some(valid => valid === false);
+    // Enable button if all fields have values and no validation errors
+    submitBtn.disabled = !(hasName && hasDescription && hasPrompt && hasInputType) || hasValidationErrors;
 }
 // Initialize when DOM is loaded
 if (document.readyState === 'loading') {

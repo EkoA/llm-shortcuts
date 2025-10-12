@@ -50,9 +50,14 @@ export class PromptExecutor {
                 throw new PromptExecutorError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE');
             }
             // Interpolate prompt with user input
+            console.log('=== PROMPT EXECUTOR DEBUG ===');
+            console.log('Recipe prompt template:', recipe.prompt);
+            console.log('User input:', userInput);
+            console.log('User input type:', typeof userInput);
             const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, options.sanitization);
             console.log('Executing recipe:', recipe.name);
             console.log('Interpolated prompt:', interpolatedPrompt);
+            console.log('Interpolation successful:', interpolatedPrompt !== recipe.prompt);
             // Execute prompt
             const response = await this.aiClient.executePrompt(interpolatedPrompt, {
                 temperature: options.temperature ?? 0.7,
