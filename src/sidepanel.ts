@@ -79,7 +79,7 @@ async function initialize() {
     console.log('window.ai:', window.ai);
 
     // Check AI availability
-    await checkAIAvailability();
+    await checkAIAvailabilityDirect();
 
     // Set up event listeners
     setupEventListeners();
@@ -89,33 +89,44 @@ async function initialize() {
 }
 
 /**
- * Check if Chrome AI API is available
+ * Check if Chrome AI API is available directly in sidepanel
  */
-async function checkAIAvailability() {
+async function checkAIAvailabilityDirect() {
     const statusEl = aiStatusEl.querySelector('.loading') as HTMLElement;
 
     try {
-        const isAvailable = await isAIAvailable();
-        if (!isAvailable) {
-            throw new Error('Chrome AI API is not available. Please ensure you are using Chrome 127+ with AI features enabled.');
+        console.log('=== AI Availability Debug ===');
+        console.log('Checking AI availability in sidepanel...');
+        console.log('LanguageModel exists:', !!(window as any).LanguageModel);
+
+        const aiWindow = window as any;
+
+        if (!aiWindow.LanguageModel) {
+            throw new Error('Chrome AI API (LanguageModel) not found. Please ensure Chrome flags are enabled:\n• chrome://flags/#optimization-guide-on-device-model\n• chrome://flags/#prompt-api-for-gemini-nano');
         }
 
-        aiClient = getAIClient();
-        const testResult = await aiClient.testConnection();
+        // Check AI availability using the correct method
+        const availability = await aiWindow.LanguageModel.availability();
+        console.log('AI availability status:', availability);
 
-        if (testResult.available) {
-            statusEl.innerHTML = `
+        // Check if AI is available or downloadable
+        const isAvailable = availability === 'available' || availability === 'downloadable';
+
+        if (!isAvailable) {
+            throw new Error(`AI model availability: ${availability}`);
+        }
+
+        console.log('✅ AI is available in sidepanel!');
+
+        statusEl.innerHTML = `
         <div class="success">
           ✅ AI is available and working
         </div>
       `;
-            aiStatusEl.className = 'ai-status success';
+        aiStatusEl.className = 'ai-status success';
 
-            // Show recipe list
-            recipeListEl.style.display = 'block';
-        } else {
-            throw new Error(testResult.error || 'AI test failed');
-        }
+        // Show recipe list
+        recipeListEl.style.display = 'block';
     } catch (error) {
         console.error('AI availability check failed:', error);
 
@@ -135,6 +146,7 @@ async function checkAIAvailability() {
         aiStatusEl.className = 'ai-status error';
     }
 }
+
 
 /**
  * Set up event listeners
@@ -333,73 +345,57 @@ async function handleRecipeExecution() {
  */
 async function executeRecipeWithStreaming(recipe: Recipe, userInput: string): Promise<any> {
     try {
-        // Check if streaming is supported
-        const streamingSupported = true; // Assume streaming is supported for now
-
-        if (streamingSupported) {
-            return await executeWithStreaming(recipe, userInput);
-        } else {
-            return await executeWithoutStreaming(recipe, userInput);
-        }
+        // Use content script for AI API calls
+        return await executeWithContentScript(recipe, userInput);
     } catch (error) {
-        console.error('Streaming execution failed, falling back to non-streaming:', error);
-        return await executeWithoutStreaming(recipe, userInput);
-    }
-}
-
-/**
- * Execute recipe with streaming
- */
-async function executeWithStreaming(recipe: Recipe, userInput: string): Promise<any> {
-    const resultContent = resultContentEl;
-    let fullResponse = '';
-
-    try {
-        const stream = promptExecutor.executeRecipeStreaming(recipe, userInput, {
-            streaming: true,
-            sanitization: {
-                maxLength: 10000,
-                allowHtml: false,
-                escapeSpecialChars: true
-            }
-        });
-
-        // Show result container
-        document.getElementById('execution-result')!.style.display = 'block';
-        resultContent.textContent = '';
-
-        // Process streaming response
-        for await (const chunk of stream) {
-            fullResponse += chunk;
-            resultContent.textContent = fullResponse;
-
-            // Scroll to bottom to show new content
-            resultContent.scrollTop = resultContent.scrollHeight;
-        }
-
-        return {
-            success: true,
-            response: fullResponse
-        };
-    } catch (error) {
-        console.error('Streaming execution failed:', error);
+        console.error('Content script execution failed:', error);
         throw error;
     }
 }
 
 /**
- * Execute recipe without streaming
+ * Execute recipe using direct AI access
  */
-async function executeWithoutStreaming(recipe: Recipe, userInput: string): Promise<any> {
-    return await promptExecutor.executeRecipe(recipe, userInput, {
-        streaming: false,
-        sanitization: {
-            maxLength: 10000,
-            allowHtml: false,
-            escapeSpecialChars: true
+async function executeWithContentScript(recipe: Recipe, userInput: string): Promise<any> {
+    try {
+        console.log('Executing recipe via direct AI access:', recipe.name);
+
+        // Interpolate the prompt with user input
+        const interpolatedPrompt = recipe.prompt.replace('{user_input}', userInput);
+
+        // Check if AI is available
+        const aiWindow = window as any;
+        if (!aiWindow.LanguageModel) {
+            throw new Error('Chrome AI API not available');
         }
-    });
+
+        // Create AI session
+        const session = await aiWindow.LanguageModel.create({
+            temperature: 0.7,
+            topK: 40
+        });
+
+        try {
+            // Execute prompt
+            const response = await session.prompt(interpolatedPrompt);
+            session.destroy();
+
+            console.log('Direct AI execution successful');
+
+            return {
+                success: true,
+                response: response
+            };
+        } catch (error) {
+            session.destroy();
+            throw error;
+        }
+    } catch (error) {
+        console.error('Direct AI execution failed:', error);
+        throw error;
+    }
 }
+
 
 /**
  * Show execution error

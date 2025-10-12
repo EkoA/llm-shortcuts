@@ -39,17 +39,16 @@ export class AIClient {
             return this.capabilities;
         }
         try {
-            // Check if window.ai is available
-            if (!window.ai || !window.ai.languageModel) {
+            // Check if LanguageModel is available
+            if (!window.LanguageModel) {
                 console.error('Chrome AI API not available. Debug info:');
-                console.error('- window.ai:', !!window.ai);
-                console.error('- window.ai.languageModel:', !!(window.ai && window.ai.languageModel));
+                console.error('- LanguageModel:', !!window.LanguageModel);
                 console.error('- User agent:', navigator.userAgent);
                 console.error('- Chrome version check:', this.getChromeVersion());
                 throw new AIError('Chrome AI API is not available. Please ensure you are using Chrome 127+ with AI features enabled. Check chrome://flags/#optimization-guide-on-device-model and chrome://flags/#prompt-api-for-gemini-nano', 'API_NOT_AVAILABLE');
             }
             // Check AI availability status
-            const availability = await window.ai.languageModel.availability();
+            const availability = await window.LanguageModel.availability();
             console.log('AI availability status:', availability);
             if (availability === 'unavailable') {
                 throw new AIError('AI model is not available on this device. Please check Chrome flags and ensure you are using Chrome 127+', 'MODEL_UNAVAILABLE');
@@ -64,14 +63,14 @@ export class AIClient {
                 let downloadStatus = availability;
                 while (downloadStatus === 'downloading') {
                     await new Promise(resolve => setTimeout(resolve, 1000));
-                    downloadStatus = await window.ai.languageModel.availability();
+                    downloadStatus = await window.LanguageModel.availability();
                 }
                 if (downloadStatus !== 'available') {
                     throw new AIError('AI model download failed or is not available', 'DOWNLOAD_FAILED');
                 }
             }
             // Get capabilities
-            this.capabilities = await window.ai.languageModel.capabilities();
+            this.capabilities = await window.LanguageModel.capabilities();
             this.isInitialized = true;
             console.log('AI Client initialized with capabilities:', this.capabilities);
             return this.capabilities;
@@ -87,11 +86,13 @@ export class AIClient {
      */
     async isAvailable() {
         try {
-            if (!window.ai || !window.ai.languageModel) {
+            if (!window.LanguageModel) {
                 return false;
             }
-            const availability = await window.ai.languageModel.availability();
-            return availability === 'available';
+            const availability = await window.LanguageModel.availability();
+            // Accept both 'available' and 'downloadable' as valid states
+            // The model will be downloaded automatically on first use if needed
+            return availability === 'available' || availability === 'downloadable';
         }
         catch (error) {
             console.error('Error checking AI availability:', error);
@@ -111,11 +112,11 @@ export class AIClient {
         if (!this.isInitialized) {
             await this.initialize();
         }
-        if (!window.ai?.languageModel) {
+        if (!window.LanguageModel) {
             throw new AIError('AI API not available', 'API_NOT_AVAILABLE');
         }
         try {
-            const session = await window.ai.languageModel.create({
+            const session = await window.LanguageModel.create({
                 temperature: options?.temperature ?? 0.7,
                 topK: options?.topK ?? 40
             });
@@ -202,11 +203,13 @@ export const getAIClient = () => AIClient.getInstance();
  */
 export const isAIAvailable = async () => {
     try {
-        if (!window.ai || !window.ai.languageModel) {
+        if (!window.LanguageModel) {
             return false;
         }
-        const availability = await window.ai.languageModel.availability();
-        return availability === 'available';
+        const availability = await window.LanguageModel.availability();
+        // Accept both 'available' and 'downloadable' as valid states
+        // The model will be downloaded automatically on first use if needed
+        return availability === 'available' || availability === 'downloadable';
     }
     catch (error) {
         console.error('Error checking AI availability:', error);

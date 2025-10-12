@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test AI API on GitHub</title>
+</head>
+
+<body>
+    <h1>Testing Chrome AI API on GitHub</h1>
+    <div id="output"></div>
+
+    <script>
+        const output = document.getElementById('output');
+
+        async function testAI() {
+            const results = [];
+
+            // Check if window.ai exists
+            results.push(`window.ai exists: ${!!window.ai}`);
+            results.push(`window.ai.languageModel exists: ${!!(window.ai && window.ai.languageModel)}`);
+
+            if (window.ai && window.ai.languageModel) {
+                try {
+                    const availability = await window.ai.languageModel.availability();
+                    results.push(`Availability status: ${availability}`);
+
+                    if (availability === 'available' || availability === 'downloadable') {
+                        results.push('✅ Should work!');
+                    } else {
+                        results.push(`❌ Availability status '${availability}' is not supported`);
+                    }
+                } catch (error) {
+                    results.push(`❌ Error checking availability: ${error.message}`);
+                }
+            } else {
+                results.push('❌ Chrome AI API not found on this page');
+            }
+
+            output.innerHTML = results.map(r => `<p>${r}</p>`).join('');
+        }
+
+        testAI();
+    </script>
+</body>
+
+</html>

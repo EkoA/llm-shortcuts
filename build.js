@@ -49,7 +49,8 @@ function copyStaticAssets() {
     const staticFiles = [
         'manifest.json',
         'sidepanel.html',
-        'sidepanel.css'
+        'sidepanel.css',
+        'offscreen.html'
     ];
 
     staticFiles.forEach(file => {
@@ -70,7 +71,8 @@ function copyCompiledJS() {
 
     const jsFiles = [
         'background.js',
-        'sidepanel.js'
+        'sidepanel.js',
+        'offscreen.js'
     ];
 
     jsFiles.forEach(file => {
