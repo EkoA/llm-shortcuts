@@ -1325,11 +1325,35 @@ class AIClient {
                     throw new AIError('AI model download failed or is not available', 'DOWNLOAD_FAILED');
                 }
             }
-            // Get capabilities
-            this.capabilities = await window.LanguageModel.capabilities();
-            this.isInitialized = true;
-            console.log('AI Client initialized with capabilities:', this.capabilities);
-            return this.capabilities;
+            // Get capabilities (if available)
+            try {
+                if (typeof window.LanguageModel.capabilities === 'function') {
+                    this.capabilities = await window.LanguageModel.capabilities();
+                    console.log('AI Client initialized with capabilities:', this.capabilities);
+                }
+                else {
+                    console.log('AI capabilities not available, using basic AI functionality');
+                    this.capabilities = {
+                        canUseAI: true,
+                        model: 'chrome-ai',
+                        features: ['prompt', 'streaming']
+                    };
+                }
+                this.isInitialized = true;
+                return this.capabilities;
+            }
+            catch (capabilitiesError) {
+                console.error('Failed to get AI capabilities:', capabilitiesError);
+                // Don't fail initialization if capabilities are not available
+                console.log('Proceeding without capabilities, using basic AI functionality');
+                this.capabilities = {
+                    canUseAI: true,
+                    model: 'chrome-ai',
+                    features: ['prompt', 'streaming']
+                };
+                this.isInitialized = true;
+                return this.capabilities;
+            }
         }
         catch (error) {
             const aiError = new AIError('Failed to initialize AI client', 'INITIALIZATION_FAILED', error);
@@ -1532,14 +1556,9 @@ class PromptExecutor {
                 throw new PromptExecutorError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE');
             }
             // Interpolate prompt with user input
-            console.log('=== PROMPT EXECUTOR DEBUG ===');
-            console.log('Recipe prompt template:', recipe.prompt);
-            console.log('User input:', userInput);
-            console.log('User input type:', typeof userInput);
             const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, options.sanitization);
             console.log('Executing recipe:', recipe.name);
             console.log('Interpolated prompt:', interpolatedPrompt);
-            console.log('Interpolation successful:', interpolatedPrompt !== recipe.prompt);
             // Execute prompt
             const response = await this.aiClient.executePrompt(interpolatedPrompt, {
                 temperature: options.temperature ?? 0.7,
@@ -1758,6 +1777,253 @@ class PromptExecutor {
 const getPromptExecutor = () => PromptExecutor.getInstance();
 //# sourceMappingURL=prompt-executor.js.map
 
+/**
+ * Prompt Enhancer Service
+ * Automatically improves user-written prompts using LLM
+ */
+
+/**
+ * Prompt Enhancer Service
+ * Uses AI to automatically improve user-provided prompts
+ */
+class PromptEnhancer {
+    constructor() {
+        this.aiClient = getAIClient();
+    }
+    /**
+     * Get singleton instance of PromptEnhancer
+     */
+    static getInstance() {
+        if (!PromptEnhancer.instance) {
+            PromptEnhancer.instance = new PromptEnhancer();
+        }
+        return PromptEnhancer.instance;
+    }
+    /**
+     * Enhance a user's prompt to be more effective
+     */
+    async enhancePrompt(originalPrompt, options = {}) {
+        try {
+            // Validate input
+            if (!originalPrompt || originalPrompt.trim().length === 0) {
+                return {
+                    success: false,
+                    error: 'Original prompt cannot be empty',
+                    originalPrompt
+                };
+            }
+            // Check if AI client is available and initialize if needed
+            if (!(await this.aiClient.isAvailable())) {
+                return {
+                    success: false,
+                    error: 'AI client is not available. Please ensure Chrome AI API is enabled.',
+                    originalPrompt
+                };
+            }
+            // Ensure AI client is initialized with timeout
+            try {
+                const initPromise = this.aiClient.initialize();
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI client initialization timeout')), 10000));
+                await Promise.race([initPromise, timeoutPromise]);
+            }
+            catch (initError) {
+                console.error('Failed to initialize AI client for enhancement:', initError);
+                // Try to use direct AI access as fallback
+                console.log('Attempting fallback to direct AI access...');
+                try {
+                    const enhancedPrompt = await this.enhancePromptDirectly(originalPrompt);
+                    return {
+                        success: true,
+                        enhancedPrompt,
+                        originalPrompt,
+                        improvements: ['Enhanced using direct AI access']
+                    };
+                }
+                catch (fallbackError) {
+                    console.error('Fallback enhancement also failed:', fallbackError);
+                    return {
+                        success: false,
+                        error: 'Failed to initialize AI client. Please try again.',
+                        originalPrompt
+                    };
+                }
+            }
+            console.log('Enhancing prompt:', originalPrompt);
+            // Create enhancement meta-prompt
+            const metaPrompt = this.createEnhancementMetaPrompt(originalPrompt);
+            // Execute enhancement with timeout
+            const executePromise = this.aiClient.executePrompt(metaPrompt, {
+                temperature: options.temperature ?? 0.3, // Lower temperature for more consistent results
+                topK: options.topK ?? 40
+            });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Enhancement timeout')), 30000));
+            const enhancedPrompt = await Promise.race([executePromise, timeoutPromise]);
+            // Validate and clean the enhanced prompt
+            const cleanedPrompt = this.cleanEnhancedPrompt(enhancedPrompt, originalPrompt);
+            // Extract improvements for user feedback
+            const improvements = this.extractImprovements(originalPrompt, cleanedPrompt);
+            console.log('Prompt enhanced successfully');
+            console.log('Original:', originalPrompt);
+            console.log('Enhanced:', cleanedPrompt);
+            return {
+                success: true,
+                enhancedPrompt: cleanedPrompt,
+                originalPrompt,
+                improvements
+            };
+        }
+        catch (error) {
+            console.error('Prompt enhancement failed:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred during enhancement',
+                originalPrompt
+            };
+        }
+    }
+    /**
+     * Create the meta-prompt for enhancing user prompts
+     */
+    createEnhancementMetaPrompt(originalPrompt) {
+        return `You are an expert prompt engineer. Your task is to improve the following user prompt to make it more effective, clear, and specific while maintaining its original intent.
+
+IMPORTANT RULES:
+1. Preserve the original intent and purpose of the prompt
+2. If the prompt contains placeholders like {user_input}, {input}, or similar, keep them exactly as they are
+3. Make the prompt more specific and actionable
+4. Add context and constraints that will improve results
+5. Use clear, direct language
+6. Structure the prompt for better AI understanding
+7. Keep the enhanced prompt concise but comprehensive
+8. Do not change the core functionality or expected output format
+
+Original prompt to enhance:
+"${originalPrompt}"
+
+Enhanced prompt:`;
+    }
+    /**
+     * Clean and validate the enhanced prompt
+     */
+    cleanEnhancedPrompt(enhancedPrompt, originalPrompt) {
+        // Remove any quotes that might have been added
+        let cleaned = enhancedPrompt.trim();
+        // Remove leading/trailing quotes if present
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+            cleaned = cleaned.slice(1, -1);
+        }
+        if (cleaned.startsWith("'") && cleaned.endsWith("'")) {
+            cleaned = cleaned.slice(1, -1);
+        }
+        // Ensure placeholder syntax is preserved
+        const originalPlaceholders = this.extractPlaceholders(originalPrompt);
+        const enhancedPlaceholders = this.extractPlaceholders(cleaned);
+        // If original had placeholders but enhanced doesn't, try to preserve them
+        if (originalPlaceholders.length > 0 && enhancedPlaceholders.length === 0) {
+            // Try to add back the most common placeholder
+            if (originalPrompt.includes('{user_input}') && !cleaned.includes('{user_input}')) {
+                // Add {user_input} if it seems like it should be there
+                if (cleaned.toLowerCase().includes('input') || cleaned.toLowerCase().includes('text') || cleaned.toLowerCase().includes('content')) {
+                    cleaned = cleaned.replace(/(\b(?:input|text|content|data)\b)/gi, '$1: {user_input}');
+                }
+            }
+        }
+        return cleaned;
+    }
+    /**
+     * Extract placeholder variables from a prompt
+     */
+    extractPlaceholders(prompt) {
+        const placeholderRegex = /\{([^}]+)\}/g;
+        const placeholders = [];
+        let match;
+        while ((match = placeholderRegex.exec(prompt)) !== null) {
+            if (match[1]) {
+                placeholders.push(match[1]);
+            }
+        }
+        return placeholders;
+    }
+    /**
+     * Extract improvements made to the prompt for user feedback
+     */
+    extractImprovements(original, enhanced) {
+        const improvements = [];
+        // Check for common improvements
+        if (original.length < enhanced.length && enhanced.length > original.length * 1.2) {
+            improvements.push('Added more specific instructions and context');
+        }
+        if (enhanced.includes('Please') || enhanced.includes('please')) {
+            improvements.push('Added polite and clear language');
+        }
+        if (enhanced.includes('format') || enhanced.includes('structure')) {
+            improvements.push('Specified output format requirements');
+        }
+        if (enhanced.includes('specific') || enhanced.includes('detailed')) {
+            improvements.push('Made instructions more specific and actionable');
+        }
+        if (enhanced.includes('context') || enhanced.includes('background')) {
+            improvements.push('Added helpful context for better results');
+        }
+        // If no specific improvements detected, add a generic one
+        if (improvements.length === 0) {
+            improvements.push('Improved clarity and effectiveness');
+        }
+        return improvements;
+    }
+    /**
+     * Fallback method to enhance prompt using direct AI access
+     */
+    async enhancePromptDirectly(originalPrompt) {
+        const aiWindow = window;
+        if (!aiWindow.LanguageModel) {
+            throw new Error('Chrome AI API not available');
+        }
+        // Create AI session directly
+        const session = await aiWindow.LanguageModel.create({
+            temperature: 0.3,
+            topK: 40
+        });
+        try {
+            // Create enhancement meta-prompt
+            const metaPrompt = this.createEnhancementMetaPrompt(originalPrompt);
+            // Execute enhancement with timeout
+            const promptPromise = session.prompt(metaPrompt);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Direct enhancement timeout')), 30000));
+            const enhancedPrompt = await Promise.race([promptPromise, timeoutPromise]);
+            // Clean up session
+            session.destroy();
+            // Clean and validate the enhanced prompt
+            return this.cleanEnhancedPrompt(enhancedPrompt, originalPrompt);
+        }
+        catch (error) {
+            session.destroy();
+            throw error;
+        }
+    }
+    /**
+     * Test the enhancement functionality
+     */
+    async testEnhancement() {
+        try {
+            const testPrompt = "Make this better";
+            const result = await this.enhancePrompt(testPrompt);
+            return result.success;
+        }
+        catch (error) {
+            console.error('Enhancement test failed:', error);
+            return false;
+        }
+    }
+}
+/**
+ * Utility function to get Prompt Enhancer instance
+ */
+const getPromptEnhancer = () => {
+    return PromptEnhancer.getInstance();
+};
+//# sourceMappingURL=prompt-enhancer.js.map
+
 
 /**
  * Side Panel Controller for LLM Shortcuts
@@ -1786,11 +2052,14 @@ let sortSelect = null;
 let aiClient = null;
 let recipeManager = null;
 let promptExecutor = null;
+let promptEnhancer = null;
 let currentRecipes = [];
 let currentRecipe = null;
 let isExecuting = false;
 let editingRecipeId = null;
 let formValidationState = {};
+let isEnhancing = false;
+let currentEnhancement = null;
 /**
  * Initialize the side panel
  */
@@ -1800,13 +2069,8 @@ async function initialize() {
     recipeManager = new RecipeManager();
     // Initialize prompt executor
     promptExecutor = getPromptExecutor();
-    // Test interpolation function
-    testInterpolation();
-    // Check recipe placeholders
-    await checkRecipePlaceholders();
-    // Make test functions available globally for debugging
-    window.testInterpolation = testInterpolation;
-    window.checkRecipePlaceholders = checkRecipePlaceholders;
+    // Initialize prompt enhancer
+    promptEnhancer = getPromptEnhancer();
     // Debug: Check if AI client functions are loaded
     console.log('AI Client loaded. Functions available:');
     console.log('isAIAvailable:', typeof isAIAvailable);
@@ -1840,10 +2104,12 @@ async function checkAIAvailabilityDirect() {
         if (!isAvailable) {
             throw new Error(`AI model availability: ${availability}`);
         }
-        console.log('✅ AI is available in sidepanel!');
+        console.log('✓ AI is available in sidepanel!');
         statusEl.innerHTML = `
         <div class="success">
-          ✅ AI is available and working
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+            <polyline points="20,6 9,17 4,12"></polyline>
+          </svg> AI is available and working
         </div>
       `;
         aiStatusEl.className = 'ai-status success';
@@ -1856,7 +2122,11 @@ async function checkAIAvailabilityDirect() {
         const chromeVersion = navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || 'Unknown';
         statusEl.innerHTML = `
       <div class="error">
-        ❌ AI not available: ${errorMessage}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg> AI not available: ${errorMessage}
         <br><small>Current Chrome version: ${chromeVersion}</small>
         <br><small>Required: Chrome 127+ with AI features enabled</small>
         <br><small>Please check these Chrome flags:</small>
@@ -1890,6 +2160,21 @@ function setupEventListeners() {
     sortSelect?.addEventListener('change', handleSortChange);
     // Recipe list interactions (event delegation)
     recipeListEl?.addEventListener('click', handleRecipeListClick);
+    // Enhancement functionality
+    const enhancePromptBtn = document.getElementById('enhance-prompt-btn');
+    const closeEnhancementBtn = document.getElementById('close-enhancement');
+    const acceptEnhancementBtn = document.getElementById('accept-enhancement');
+    const rejectEnhancementBtn = document.getElementById('reject-enhancement');
+    // Ensure enhance prompt button is visible
+    if (enhancePromptBtn) {
+        if (window.getComputedStyle(enhancePromptBtn).display === 'none') {
+            enhancePromptBtn.style.display = 'block';
+        }
+    }
+    enhancePromptBtn?.addEventListener('click', handleEnhancePrompt);
+    closeEnhancementBtn?.addEventListener('click', hideEnhancementUI);
+    acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
+    rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
 }
 /**
  * Load initial state
@@ -1941,6 +2226,11 @@ function showRecipeForm() {
     setupFormValidation();
     // Initialize submit button state
     updateSubmitButtonState();
+    // Ensure enhance prompt button is visible after form setup
+    const enhancePromptBtn = document.getElementById('enhance-prompt-btn');
+    if (enhancePromptBtn && window.getComputedStyle(enhancePromptBtn).display === 'none') {
+        enhancePromptBtn.style.display = 'block';
+    }
 }
 /**
  * Hide recipe creation form
@@ -2040,11 +2330,7 @@ async function handleRecipeExecution() {
     resultContentEl.textContent = '';
     document.getElementById('execution-result').style.display = 'none';
     try {
-        console.log('=== RECIPE EXECUTION DEBUG ===');
         console.log('Executing recipe:', currentRecipe.name);
-        console.log('Recipe prompt template:', currentRecipe.prompt);
-        console.log('User input collected:', userInput);
-        console.log('User input length:', userInput.length);
         // Execute recipe with streaming
         const result = await executeRecipeWithStreaming(currentRecipe, userInput);
         if (result.success) {
@@ -2095,24 +2381,12 @@ async function executeWithContentScript(recipe, userInput) {
     try {
         console.log('Executing recipe via direct AI access:', recipe.name);
         // Use proper prompt interpolation with sanitization
-        console.log('=== INTERPOLATION DEBUG ===');
-        console.log('Original prompt template:', recipe.prompt);
-        console.log('User input to interpolate:', userInput);
-        console.log('User input type:', typeof userInput);
-        let interpolatedPrompt;
-        try {
-            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
-                maxLength: 10000,
-                allowHtml: false,
-                escapeSpecialChars: true
-            });
-            console.log('Interpolated prompt result:', interpolatedPrompt);
-            console.log('Interpolation successful:', interpolatedPrompt !== recipe.prompt);
-        }
-        catch (interpolationError) {
-            console.error('Interpolation failed:', interpolationError);
-            throw new Error(`Failed to interpolate prompt: ${interpolationError instanceof Error ? interpolationError.message : 'Unknown error'}`);
-        }
+        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+            maxLength: 10000,
+            allowHtml: false,
+            escapeSpecialChars: true
+        });
+        console.log('Interpolated prompt:', interpolatedPrompt);
         // Check if AI is available
         const aiWindow = window;
         if (!aiWindow.LanguageModel) {
@@ -2163,53 +2437,6 @@ function showExecutionError(errorMessage) {
 function retryExecution() {
     if (currentRecipe && !isExecuting) {
         handleRecipeExecution();
-    }
-}
-/**
- * Test interpolation function (for debugging)
- */
-function testInterpolation() {
-    console.log('=== TESTING INTERPOLATION ===');
-    const testTemplate = "Rewrite this email to be more professional: {user_input}";
-    const testInput = "Hey, can we meet tomorrow?";
-    try {
-        const result = interpolatePrompt(testTemplate, testInput);
-        console.log('Test template:', testTemplate);
-        console.log('Test input:', testInput);
-        console.log('Test result:', result);
-        console.log('Test successful:', result.includes(testInput));
-    }
-    catch (error) {
-        console.error('Test interpolation failed:', error);
-    }
-}
-/**
- * Check recipe placeholders (for debugging)
- */
-async function checkRecipePlaceholders() {
-    console.log('=== CHECKING RECIPE PLACEHOLDERS ===');
-    try {
-        const recipes = await recipeManager.getAllRecipes();
-        console.log('Total recipes:', recipes.length);
-        recipes.forEach((recipe, index) => {
-            console.log(`Recipe ${index + 1}: ${recipe.name}`);
-            console.log(`  Prompt: ${recipe.prompt}`);
-            // Check for placeholders
-            const placeholders = recipe.prompt.match(/\{[^}]+\}/g);
-            console.log(`  Placeholders found:`, placeholders || 'None');
-            // Test interpolation with dummy input
-            try {
-                const testResult = interpolatePrompt(recipe.prompt, 'TEST_INPUT');
-                console.log(`  Interpolation test: ${testResult.includes('TEST_INPUT') ? 'SUCCESS' : 'FAILED'}`);
-            }
-            catch (error) {
-                console.log(`  Interpolation test: FAILED - ${error}`);
-            }
-            console.log('---');
-        });
-    }
-    catch (error) {
-        console.error('Failed to check recipe placeholders:', error);
     }
 }
 /**
@@ -2280,13 +2507,23 @@ function renderRecipeList() {
                 <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
                 <div class="recipe-actions">
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
-                        ▶️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="edit" title="Edit Recipe">
-                        ✏️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="delete" title="Delete Recipe">
-                        🗑️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="M19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -2426,13 +2663,23 @@ function renderFilteredRecipeList(recipes) {
                 <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
                 <div class="recipe-actions">
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
-                        ▶️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="edit" title="Edit Recipe">
-                        ✏️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="delete" title="Delete Recipe">
-                        🗑️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="M19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -2781,6 +3028,177 @@ function updateSubmitButtonState() {
         Object.values(formValidationState).some(valid => valid === false);
     // Enable button if all fields have values and no validation errors
     submitBtn.disabled = !(hasName && hasDescription && hasPrompt && hasInputType) || hasValidationErrors;
+}
+/**
+ * Handle prompt enhancement request
+ */
+async function handleEnhancePrompt() {
+    if (!promptEnhancer) {
+        alert('Prompt enhancer not available');
+        return;
+    }
+    const promptInput = document.getElementById('recipe-prompt');
+    if (!promptInput)
+        return;
+    const originalPrompt = promptInput.value.trim();
+    if (!originalPrompt) {
+        alert('Please enter a prompt to enhance');
+        return;
+    }
+    if (isEnhancing) {
+        alert('Enhancement is already in progress');
+        return;
+    }
+    try {
+        isEnhancing = true;
+        showEnhancementLoading();
+        console.log('Enhancing prompt:', originalPrompt);
+        const result = await promptEnhancer.enhancePrompt(originalPrompt);
+        console.log('Enhancement result received:', result);
+        if (result.success && result.enhancedPrompt) {
+            console.log('Enhancement successful, showing result');
+            currentEnhancement = result;
+            showEnhancementResult(result);
+        }
+        else {
+            console.log('Enhancement failed, showing error');
+            showEnhancementError(result.error || 'Enhancement failed');
+        }
+    }
+    catch (error) {
+        console.error('Prompt enhancement failed:', error);
+        showEnhancementError(error instanceof Error ? error.message : 'Unknown error occurred');
+    }
+    finally {
+        isEnhancing = false;
+    }
+}
+/**
+ * Show enhancement loading state
+ */
+function showEnhancementLoading() {
+    console.log('Showing enhancement loading state');
+    const enhancementUI = document.getElementById('enhancement-ui');
+    const enhancementContent = enhancementUI?.querySelector('.enhancement-content');
+    console.log('Loading state elements:');
+    console.log('- enhancementUI:', !!enhancementUI);
+    console.log('- enhancementContent:', !!enhancementContent);
+    if (!enhancementUI || !enhancementContent) {
+        console.error('Missing enhancement UI elements for loading state');
+        return;
+    }
+    enhancementUI.style.display = 'block';
+    enhancementContent.innerHTML = `
+        <div class="enhancement-loading">
+            <div class="spinner"></div>
+            Enhancing your prompt...
+        </div>
+    `;
+    console.log('Enhancement loading state displayed');
+}
+/**
+ * Show enhancement result
+ */
+function showEnhancementResult(result) {
+    console.log('Showing enhancement result:', result);
+    const enhancementUI = document.getElementById('enhancement-ui');
+    const originalDisplay = document.getElementById('original-prompt-display');
+    const enhancedDisplay = document.getElementById('enhanced-prompt-display');
+    const improvementsList = document.getElementById('enhancement-improvements');
+    console.log('Enhancement UI elements found:');
+    console.log('- enhancementUI:', !!enhancementUI);
+    console.log('- originalDisplay:', !!originalDisplay);
+    console.log('- enhancedDisplay:', !!enhancedDisplay);
+    console.log('- improvementsList:', !!improvementsList);
+    if (!enhancementUI) {
+        console.error('Enhancement UI container not found');
+        return;
+    }
+    // Make sure the enhancement UI is visible first
+    enhancementUI.style.display = 'block';
+    // Now try to find the child elements again
+    const originalDisplayRetry = document.getElementById('original-prompt-display');
+    const enhancedDisplayRetry = document.getElementById('enhanced-prompt-display');
+    const improvementsListRetry = document.getElementById('enhancement-improvements');
+    console.log('Retry after making UI visible:');
+    console.log('- originalDisplayRetry:', !!originalDisplayRetry);
+    console.log('- enhancedDisplayRetry:', !!enhancedDisplayRetry);
+    console.log('- improvementsListRetry:', !!improvementsListRetry);
+    if (!originalDisplayRetry || !enhancedDisplayRetry || !improvementsListRetry) {
+        console.error('Missing enhancement UI elements after making visible, cannot display result');
+        return;
+    }
+    // Show original and enhanced prompts
+    originalDisplayRetry.textContent = result.originalPrompt || '';
+    enhancedDisplayRetry.textContent = result.enhancedPrompt || '';
+    // Show improvements
+    if (result.improvements && result.improvements.length > 0) {
+        improvementsListRetry.innerHTML = `
+            <h5>Improvements made:</h5>
+            <ul>
+                ${result.improvements.map((improvement) => `<li>${escapeHtml(improvement)}</li>`).join('')}
+            </ul>
+        `;
+    }
+    else {
+        improvementsListRetry.innerHTML = '';
+    }
+    console.log('Enhancement result displayed successfully');
+}
+/**
+ * Show enhancement error
+ */
+function showEnhancementError(errorMessage) {
+    const enhancementUI = document.getElementById('enhancement-ui');
+    const enhancementContent = enhancementUI?.querySelector('.enhancement-content');
+    if (!enhancementUI || !enhancementContent)
+        return;
+    enhancementUI.style.display = 'block';
+    enhancementContent.innerHTML = `
+        <div class="enhancement-error">
+            <strong>Enhancement failed:</strong> ${escapeHtml(errorMessage)}
+        </div>
+        <div class="enhancement-actions">
+            <button type="button" id="close-enhancement" class="btn btn-secondary btn-sm">
+                Close
+            </button>
+        </div>
+    `;
+    // Re-attach close button event listener
+    const closeBtn = document.getElementById('close-enhancement');
+    closeBtn?.addEventListener('click', hideEnhancementUI);
+}
+/**
+ * Accept enhancement and update the prompt field
+ */
+function acceptEnhancement() {
+    if (!currentEnhancement || !currentEnhancement.enhancedPrompt)
+        return;
+    const promptInput = document.getElementById('recipe-prompt');
+    if (promptInput) {
+        promptInput.value = currentEnhancement.enhancedPrompt;
+        // Trigger validation to update form state
+        validateField('prompt', currentEnhancement.enhancedPrompt);
+    }
+    hideEnhancementUI();
+    currentEnhancement = null;
+}
+/**
+ * Reject enhancement and keep original prompt
+ */
+function rejectEnhancement() {
+    hideEnhancementUI();
+    currentEnhancement = null;
+}
+/**
+ * Hide enhancement UI
+ */
+function hideEnhancementUI() {
+    const enhancementUI = document.getElementById('enhancement-ui');
+    if (enhancementUI) {
+        enhancementUI.style.display = 'none';
+    }
+    currentEnhancement = null;
 }
 // Initialize when DOM is loaded
 if (document.readyState === 'loading') {

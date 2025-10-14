@@ -571,22 +571,19 @@ The following phases break down the technical development work into logical stag
 **Goal**: Automatically improve user-written prompts using LLM
 
 **Technical Tasks:**
-- Design and test meta-prompt for prompt enhancement
-  - Experiments with different enhancement instructions
-  - Validate that placeholders (e.g., `{user_input}`) are preserved
-  - Ensure enhanced prompts maintain original intent
-- Implement Prompt Enhancer service
+- Implement Prompt Enhancer button (This should be added to the recipe creation/edit process)
   - Accept raw user prompt
-  - Send enhancement request to AI API with meta-prompt
-  - Return enhanced prompt
+  - Send enhancement request to AI API with initial prompt
+  - Return enhanced prompt that gets better results for the user and ensures Validate that {user_input} is added in the right place if missing
+   - Ensure enhanced prompts maintain original intent
   - Handle enhancement failures (return original prompt)
 - Add "Enhance Prompt" UI to recipe form
   - Button to trigger enhancement
   - Show loading state during enhancement
   - Display original vs. enhanced prompt comparison
   - Allow user to accept or discard enhancement
-- Store both `originalPrompt` and enhanced `prompt` in Recipe model
-- Add toggle to view/edit original vs. enhanced prompt
+  - If accepted, replace the original prompt with the enhanced one
+  - The user
 
 **Deliverables:**
 - Prompt Enhancer service module

@@ -72,7 +72,7 @@ function startDevWatcher() {
     });
 
     watcher.on('unlink', (filePath) => {
-        console.log(`🗑️  File removed: ${filePath}`);
+        console.log(`🗑  File removed: ${filePath}`);
         debouncedBuild();
     });
 

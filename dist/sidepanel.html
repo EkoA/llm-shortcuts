@@ -46,8 +46,48 @@
 
                     <div class="form-group">
                         <label for="recipe-prompt">Prompt Template</label>
-                        <textarea id="recipe-prompt" name="prompt" rows="5" required
-                            placeholder="Enter your prompt template. Use {user_input} for dynamic content."></textarea>
+                        <div class="prompt-input-container">
+                            <textarea id="recipe-prompt" name="prompt" rows="5" required
+                                placeholder="Enter your prompt template. Use {user_input} for dynamic content."></textarea>
+                            <div class="prompt-actions">
+                                <button type="button" id="enhance-prompt-btn" class="btn btn-secondary btn-sm">
+                                    ✨ Enhance Prompt
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Enhancement UI (hidden by default) -->
+                        <div id="enhancement-ui" class="enhancement-ui" style="display: none;">
+                            <div class="enhancement-header">
+                                <h4>Prompt Enhancement</h4>
+                                <button type="button" id="close-enhancement" class="btn-icon">✕</button>
+                            </div>
+
+                            <div class="enhancement-content">
+                                <div class="prompt-comparison">
+                                    <div class="prompt-version">
+                                        <label>Original Prompt:</label>
+                                        <div id="original-prompt-display" class="prompt-display"></div>
+                                    </div>
+
+                                    <div class="prompt-version">
+                                        <label>Enhanced Prompt:</label>
+                                        <div id="enhanced-prompt-display" class="prompt-display"></div>
+                                    </div>
+                                </div>
+
+                                <div id="enhancement-improvements" class="improvements-list"></div>
+
+                                <div class="enhancement-actions">
+                                    <button type="button" id="accept-enhancement" class="btn btn-primary btn-sm">
+                                        Accept Enhancement
+                                    </button>
+                                    <button type="button" id="reject-enhancement" class="btn btn-secondary btn-sm">
+                                        Keep Original
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">

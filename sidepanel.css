@@ -509,6 +509,145 @@ button[type="submit"]:disabled:hover {
     }
 }
 
+/* Prompt Enhancement UI */
+.prompt-input-container {
+    position: relative;
+}
+
+.prompt-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.enhancement-ui {
+    margin-top: 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    background: #f8f9fa;
+    overflow: hidden;
+}
+
+.enhancement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.enhancement-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.enhancement-content {
+    padding: 16px;
+}
+
+.prompt-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.prompt-version {
+    display: flex;
+    flex-direction: column;
+}
+
+.prompt-version label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 8px;
+}
+
+.prompt-display {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    min-height: 80px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.improvements-list {
+    margin-bottom: 16px;
+}
+
+.improvements-list h5 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.improvements-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.improvements-list li {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 4px 0;
+    padding-left: 16px;
+    position: relative;
+}
+
+.improvements-list li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: #28a745;
+    font-weight: bold;
+}
+
+.enhancement-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.enhancement-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.enhancement-loading .spinner {
+    margin-right: 8px;
+}
+
+.enhancement-error {
+    padding: 12px;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    color: #721c24;
+    font-size: 12px;
+    margin-bottom: 16px;
+}
+
 /* Responsive */
 @media (max-width: 400px) {
     .main {
@@ -517,5 +656,10 @@ button[type="submit"]:disabled:hover {
 
     .header {
         padding: 12px;
+    }
+
+    .prompt-comparison {
+        grid-template-columns: 1fr;
+        gap: 12px;
     }
 }

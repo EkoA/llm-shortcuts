@@ -58,7 +58,7 @@ function copyStaticAssets() {
             fs.copyFileSync(file, path.join(DIST_DIR, file));
             console.log(`  ✓ Copied ${file}`);
         } else {
-            console.warn(`  ⚠️  ${file} not found`);
+            console.warn(`  ⚠  ${file} not found`);
         }
     });
 }
@@ -98,7 +98,7 @@ function bundleSidepanel() {
     const bundledPath = path.join(DIST_DIR, 'sidepanel-bundled.js');
 
     if (!fs.existsSync(sidepanelPath)) {
-        console.warn('  ⚠️  sidepanel.js not found');
+        console.warn('  ⚠  sidepanel.js not found');
         return;
     }
 
@@ -111,7 +111,8 @@ function bundleSidepanel() {
         'core/storage.js',
         'core/recipe-manager.js',
         'core/ai-client.js',
-        'core/prompt-executor.js'
+        'core/prompt-executor.js',
+        'core/prompt-enhancer.js'
     ];
 
     let bundledContent = '';
@@ -147,7 +148,7 @@ function bundleSidepanel() {
             bundledContent += cleanedContent + '\n\n';
             console.log(`  ✓ Added ${file}`);
         } else {
-            console.warn(`  ⚠️  ${file} not found`);
+            console.warn(`  ⚠  ${file} not found`);
         }
     });
 
@@ -268,7 +269,7 @@ function createDevBuild() {
  * Main build function
  */
 function build() {
-    console.log('🏗️  Building LLM Shortcuts Chrome Extension...\n');
+    console.log('🔨  Building LLM Shortcuts Chrome Extension...\n');
 
     try {
         cleanDist();

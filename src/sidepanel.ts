@@ -18,6 +18,10 @@ declare const getPromptExecutor: () => any;
 // Prompt interpolation utilities will be loaded via script tag
 declare const interpolatePrompt: (template: string, userInput: string, options?: any) => string;
 
+// Prompt Enhancer will be loaded via script tag
+declare const PromptEnhancer: any;
+declare const getPromptEnhancer: () => any;
+
 // Type definitions for Recipe
 interface Recipe {
     id: string;
@@ -59,11 +63,14 @@ let sortSelect: HTMLSelectElement | null = null;
 let aiClient: any = null;
 let recipeManager: any = null;
 let promptExecutor: any = null;
+let promptEnhancer: any = null;
 let currentRecipes: Recipe[] = [];
 let currentRecipe: Recipe | null = null;
 let isExecuting = false;
 let editingRecipeId: string | null = null;
 let formValidationState: { [key: string]: boolean } = {};
+let isEnhancing = false;
+let currentEnhancement: any = null;
 
 /**
  * Initialize the side panel
@@ -76,6 +83,9 @@ async function initialize() {
 
     // Initialize prompt executor
     promptExecutor = getPromptExecutor();
+
+    // Initialize prompt enhancer
+    promptEnhancer = getPromptEnhancer();
 
     // Debug: Check if AI client functions are loaded
     console.log('AI Client loaded. Functions available:');
@@ -121,11 +131,13 @@ async function checkAIAvailabilityDirect() {
             throw new Error(`AI model availability: ${availability}`);
         }
 
-        console.log('✅ AI is available in sidepanel!');
+        console.log('✓ AI is available in sidepanel!');
 
         statusEl.innerHTML = `
         <div class="success">
-          ✅ AI is available and working
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+            <polyline points="20,6 9,17 4,12"></polyline>
+          </svg> AI is available and working
         </div>
       `;
         aiStatusEl.className = 'ai-status success';
@@ -140,7 +152,11 @@ async function checkAIAvailabilityDirect() {
 
         statusEl.innerHTML = `
       <div class="error">
-        ❌ AI not available: ${errorMessage}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg> AI not available: ${errorMessage}
         <br><small>Current Chrome version: ${chromeVersion}</small>
         <br><small>Required: Chrome 127+ with AI features enabled</small>
         <br><small>Please check these Chrome flags:</small>
@@ -182,6 +198,24 @@ function setupEventListeners() {
 
     // Recipe list interactions (event delegation)
     recipeListEl?.addEventListener('click', handleRecipeListClick);
+
+    // Enhancement functionality
+    const enhancePromptBtn = document.getElementById('enhance-prompt-btn') as HTMLButtonElement;
+    const closeEnhancementBtn = document.getElementById('close-enhancement') as HTMLButtonElement;
+    const acceptEnhancementBtn = document.getElementById('accept-enhancement') as HTMLButtonElement;
+    const rejectEnhancementBtn = document.getElementById('reject-enhancement') as HTMLButtonElement;
+
+    // Ensure enhance prompt button is visible
+    if (enhancePromptBtn) {
+        if (window.getComputedStyle(enhancePromptBtn).display === 'none') {
+            enhancePromptBtn.style.display = 'block';
+        }
+    }
+
+    enhancePromptBtn?.addEventListener('click', handleEnhancePrompt);
+    closeEnhancementBtn?.addEventListener('click', hideEnhancementUI);
+    acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
+    rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
 }
 
 /**
@@ -242,6 +276,12 @@ function showRecipeForm() {
 
     // Initialize submit button state
     updateSubmitButtonState();
+
+    // Ensure enhance prompt button is visible after form setup
+    const enhancePromptBtn = document.getElementById('enhance-prompt-btn') as HTMLButtonElement;
+    if (enhancePromptBtn && window.getComputedStyle(enhancePromptBtn).display === 'none') {
+        enhancePromptBtn.style.display = 'block';
+    }
 }
 
 /**
@@ -553,13 +593,23 @@ function renderRecipeList() {
                 <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
                 <div class="recipe-actions">
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
-                        ▶️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="edit" title="Edit Recipe">
-                        ✏️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="delete" title="Delete Recipe">
-                        🗑️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="M19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -719,13 +769,23 @@ function renderFilteredRecipeList(recipes: Recipe[]) {
                 <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
                 <div class="recipe-actions">
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
-                        ▶️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="edit" title="Edit Recipe">
-                        ✏️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
                     </button>
                     <button class="btn-icon" data-action="delete" title="Delete Recipe">
-                        🗑️
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="M19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -1114,6 +1174,206 @@ function updateSubmitButtonState() {
 
     // Enable button if all fields have values and no validation errors
     submitBtn.disabled = !(hasName && hasDescription && hasPrompt && hasInputType) || hasValidationErrors;
+}
+
+/**
+ * Handle prompt enhancement request
+ */
+async function handleEnhancePrompt() {
+    if (!promptEnhancer) {
+        alert('Prompt enhancer not available');
+        return;
+    }
+
+    const promptInput = document.getElementById('recipe-prompt') as HTMLTextAreaElement;
+    if (!promptInput) return;
+
+    const originalPrompt = promptInput.value.trim();
+    if (!originalPrompt) {
+        alert('Please enter a prompt to enhance');
+        return;
+    }
+
+    if (isEnhancing) {
+        alert('Enhancement is already in progress');
+        return;
+    }
+
+    try {
+        isEnhancing = true;
+        showEnhancementLoading();
+
+        console.log('Enhancing prompt:', originalPrompt);
+
+        const result = await promptEnhancer.enhancePrompt(originalPrompt);
+        console.log('Enhancement result received:', result);
+
+        if (result.success && result.enhancedPrompt) {
+            console.log('Enhancement successful, showing result');
+            currentEnhancement = result;
+            showEnhancementResult(result);
+        } else {
+            console.log('Enhancement failed, showing error');
+            showEnhancementError(result.error || 'Enhancement failed');
+        }
+
+    } catch (error) {
+        console.error('Prompt enhancement failed:', error);
+        showEnhancementError(error instanceof Error ? error.message : 'Unknown error occurred');
+    } finally {
+        isEnhancing = false;
+    }
+}
+
+/**
+ * Show enhancement loading state
+ */
+function showEnhancementLoading() {
+    console.log('Showing enhancement loading state');
+
+    const enhancementUI = document.getElementById('enhancement-ui') as HTMLElement;
+    const enhancementContent = enhancementUI?.querySelector('.enhancement-content') as HTMLElement;
+
+    console.log('Loading state elements:');
+    console.log('- enhancementUI:', !!enhancementUI);
+    console.log('- enhancementContent:', !!enhancementContent);
+
+    if (!enhancementUI || !enhancementContent) {
+        console.error('Missing enhancement UI elements for loading state');
+        return;
+    }
+
+    enhancementUI.style.display = 'block';
+    enhancementContent.innerHTML = `
+        <div class="enhancement-loading">
+            <div class="spinner"></div>
+            Enhancing your prompt...
+        </div>
+    `;
+
+    console.log('Enhancement loading state displayed');
+}
+
+/**
+ * Show enhancement result
+ */
+function showEnhancementResult(result: any) {
+    console.log('Showing enhancement result:', result);
+
+    const enhancementUI = document.getElementById('enhancement-ui') as HTMLElement;
+    const originalDisplay = document.getElementById('original-prompt-display') as HTMLElement;
+    const enhancedDisplay = document.getElementById('enhanced-prompt-display') as HTMLElement;
+    const improvementsList = document.getElementById('enhancement-improvements') as HTMLElement;
+
+    console.log('Enhancement UI elements found:');
+    console.log('- enhancementUI:', !!enhancementUI);
+    console.log('- originalDisplay:', !!originalDisplay);
+    console.log('- enhancedDisplay:', !!enhancedDisplay);
+    console.log('- improvementsList:', !!improvementsList);
+
+    if (!enhancementUI) {
+        console.error('Enhancement UI container not found');
+        return;
+    }
+
+    // Make sure the enhancement UI is visible first
+    enhancementUI.style.display = 'block';
+
+    // Now try to find the child elements again
+    const originalDisplayRetry = document.getElementById('original-prompt-display') as HTMLElement;
+    const enhancedDisplayRetry = document.getElementById('enhanced-prompt-display') as HTMLElement;
+    const improvementsListRetry = document.getElementById('enhancement-improvements') as HTMLElement;
+
+    console.log('Retry after making UI visible:');
+    console.log('- originalDisplayRetry:', !!originalDisplayRetry);
+    console.log('- enhancedDisplayRetry:', !!enhancedDisplayRetry);
+    console.log('- improvementsListRetry:', !!improvementsListRetry);
+
+    if (!originalDisplayRetry || !enhancedDisplayRetry || !improvementsListRetry) {
+        console.error('Missing enhancement UI elements after making visible, cannot display result');
+        return;
+    }
+
+    // Show original and enhanced prompts
+    originalDisplayRetry.textContent = result.originalPrompt || '';
+    enhancedDisplayRetry.textContent = result.enhancedPrompt || '';
+
+    // Show improvements
+    if (result.improvements && result.improvements.length > 0) {
+        improvementsListRetry.innerHTML = `
+            <h5>Improvements made:</h5>
+            <ul>
+                ${result.improvements.map((improvement: string) => `<li>${escapeHtml(improvement)}</li>`).join('')}
+            </ul>
+        `;
+    } else {
+        improvementsListRetry.innerHTML = '';
+    }
+
+    console.log('Enhancement result displayed successfully');
+}
+
+/**
+ * Show enhancement error
+ */
+function showEnhancementError(errorMessage: string) {
+    const enhancementUI = document.getElementById('enhancement-ui') as HTMLElement;
+    const enhancementContent = enhancementUI?.querySelector('.enhancement-content') as HTMLElement;
+
+    if (!enhancementUI || !enhancementContent) return;
+
+    enhancementUI.style.display = 'block';
+    enhancementContent.innerHTML = `
+        <div class="enhancement-error">
+            <strong>Enhancement failed:</strong> ${escapeHtml(errorMessage)}
+        </div>
+        <div class="enhancement-actions">
+            <button type="button" id="close-enhancement" class="btn btn-secondary btn-sm">
+                Close
+            </button>
+        </div>
+    `;
+
+    // Re-attach close button event listener
+    const closeBtn = document.getElementById('close-enhancement') as HTMLButtonElement;
+    closeBtn?.addEventListener('click', hideEnhancementUI);
+}
+
+/**
+ * Accept enhancement and update the prompt field
+ */
+function acceptEnhancement() {
+    if (!currentEnhancement || !currentEnhancement.enhancedPrompt) return;
+
+    const promptInput = document.getElementById('recipe-prompt') as HTMLTextAreaElement;
+    if (promptInput) {
+        promptInput.value = currentEnhancement.enhancedPrompt;
+
+        // Trigger validation to update form state
+        validateField('prompt', currentEnhancement.enhancedPrompt);
+    }
+
+    hideEnhancementUI();
+    currentEnhancement = null;
+}
+
+/**
+ * Reject enhancement and keep original prompt
+ */
+function rejectEnhancement() {
+    hideEnhancementUI();
+    currentEnhancement = null;
+}
+
+/**
+ * Hide enhancement UI
+ */
+function hideEnhancementUI() {
+    const enhancementUI = document.getElementById('enhancement-ui') as HTMLElement;
+    if (enhancementUI) {
+        enhancementUI.style.display = 'none';
+    }
+    currentEnhancement = null;
 }
 
 // Initialize when DOM is loaded

@@ -126,12 +126,33 @@ export class AIClient {
                 }
             }
 
-            // Get capabilities
-            this.capabilities = await (window as any).LanguageModel.capabilities();
-            this.isInitialized = true;
-
-            console.log('AI Client initialized with capabilities:', this.capabilities);
-            return this.capabilities!;
+            // Get capabilities (if available)
+            try {
+                if (typeof (window as any).LanguageModel.capabilities === 'function') {
+                    this.capabilities = await (window as any).LanguageModel.capabilities();
+                    console.log('AI Client initialized with capabilities:', this.capabilities);
+                } else {
+                    console.log('AI capabilities not available, using basic AI functionality');
+                    this.capabilities = {
+                        canUseAI: true,
+                        model: 'chrome-ai',
+                        features: ['prompt', 'streaming']
+                    };
+                }
+                this.isInitialized = true;
+                return this.capabilities!;
+            } catch (capabilitiesError) {
+                console.error('Failed to get AI capabilities:', capabilitiesError);
+                // Don't fail initialization if capabilities are not available
+                console.log('Proceeding without capabilities, using basic AI functionality');
+                this.capabilities = {
+                    canUseAI: true,
+                    model: 'chrome-ai',
+                    features: ['prompt', 'streaming']
+                };
+                this.isInitialized = true;
+                return this.capabilities!;
+            }
         } catch (error) {
             const aiError = new AIError(
                 'Failed to initialize AI client',

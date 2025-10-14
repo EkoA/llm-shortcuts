@@ -69,11 +69,35 @@ export class AIClient {
                     throw new AIError('AI model download failed or is not available', 'DOWNLOAD_FAILED');
                 }
             }
-            // Get capabilities
-            this.capabilities = await window.LanguageModel.capabilities();
-            this.isInitialized = true;
-            console.log('AI Client initialized with capabilities:', this.capabilities);
-            return this.capabilities;
+            // Get capabilities (if available)
+            try {
+                if (typeof window.LanguageModel.capabilities === 'function') {
+                    this.capabilities = await window.LanguageModel.capabilities();
+                    console.log('AI Client initialized with capabilities:', this.capabilities);
+                }
+                else {
+                    console.log('AI capabilities not available, using basic AI functionality');
+                    this.capabilities = {
+                        canUseAI: true,
+                        model: 'chrome-ai',
+                        features: ['prompt', 'streaming']
+                    };
+                }
+                this.isInitialized = true;
+                return this.capabilities;
+            }
+            catch (capabilitiesError) {
+                console.error('Failed to get AI capabilities:', capabilitiesError);
+                // Don't fail initialization if capabilities are not available
+                console.log('Proceeding without capabilities, using basic AI functionality');
+                this.capabilities = {
+                    canUseAI: true,
+                    model: 'chrome-ai',
+                    features: ['prompt', 'streaming']
+                };
+                this.isInitialized = true;
+                return this.capabilities;
+            }
         }
         catch (error) {
             const aiError = new AIError('Failed to initialize AI client', 'INITIALIZATION_FAILED', error);
