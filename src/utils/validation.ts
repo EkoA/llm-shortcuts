@@ -199,15 +199,7 @@ export function validateRecipe(recipe: Partial<Recipe>): RecipeValidationResult 
         errors.push('Original prompt is required');
     }
 
-    // Validate input type
-    if (recipe.inputType !== undefined) {
-        const inputTypeValidation = validateInputType(recipe.inputType);
-        if (!inputTypeValidation.isValid) {
-            errors.push(`Input type: ${inputTypeValidation.error}`);
-        }
-    } else {
-        errors.push('Input type is required');
-    }
+    // Input type is now optional - will be determined dynamically during execution
 
     // Validate tags (optional)
     if (recipe.tags !== undefined) {
@@ -264,7 +256,7 @@ export function validateCreateRecipeData(data: CreateRecipeData): RecipeValidati
         description: data.description,
         prompt: data.prompt,
         originalPrompt: data.originalPrompt,
-        inputType: data.inputType,
+        ...(data.inputType && { inputType: data.inputType }),
         tags: data.tags || [],
         pinned: data.pinned || false,
         createdAt: Date.now(),

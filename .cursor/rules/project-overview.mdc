@@ -621,13 +621,6 @@ The following phases break down the technical development work into logical stag
   - `Ctrl/Cmd + K` for search focus
   - `Esc` to close dialogs
   - `Enter` to submit forms
-- Implement optimistic UI updates
-  - Immediately show user input in UI before API call
-  - Show loading state without blocking interaction
-- Add recipe execution analytics tracking (local only)
-  - Count executions per recipe
-  - Track average response time
-  - Display in recipe list or details
 
 **Deliverables:**
 - Streaming response UI with progressive rendering

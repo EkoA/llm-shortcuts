@@ -244,16 +244,7 @@ function validateRecipe(recipe) {
     else {
         errors.push('Original prompt is required');
     }
-    // Validate input type
-    if (recipe.inputType !== undefined) {
-        const inputTypeValidation = validateInputType(recipe.inputType);
-        if (!inputTypeValidation.isValid) {
-            errors.push(`Input type: ${inputTypeValidation.error}`);
-        }
-    }
-    else {
-        errors.push('Input type is required');
-    }
+    // Input type is now optional - will be determined dynamically during execution
     // Validate tags (optional)
     if (recipe.tags !== undefined) {
         const tagsValidation = validateRecipeTags(recipe.tags);
@@ -301,7 +292,7 @@ function validateCreateRecipeData(data) {
         description: data.description,
         prompt: data.prompt,
         originalPrompt: data.originalPrompt,
-        inputType: data.inputType,
+        ...(data.inputType && { inputType: data.inputType }),
         tags: data.tags || [],
         pinned: data.pinned || false,
         createdAt: Date.now(),
@@ -919,7 +910,7 @@ class RecipeManager {
                 description: data.description.trim(),
                 prompt: data.prompt.trim(),
                 originalPrompt: data.originalPrompt.trim(),
-                inputType: data.inputType,
+                inputType: data.inputType || 'text', // Default to text if not specified
                 tags: data.tags || [],
                 pinned: data.pinned || false,
                 createdAt: Date.now(),
@@ -1116,7 +1107,8 @@ class RecipeManager {
             }
             // Calculate statistics
             for (const recipe of recipes) {
-                stats.recipesByInputType[recipe.inputType]++;
+                const inputType = recipe.inputType || 'text'; // Default to text if not specified
+                stats.recipesByInputType[inputType]++;
                 if (recipe.pinned) {
                     stats.pinnedRecipes++;
                 }
@@ -1167,7 +1159,7 @@ class RecipeManager {
                 description: originalRecipe.description,
                 prompt: originalRecipe.prompt,
                 originalPrompt: originalRecipe.originalPrompt,
-                inputType: originalRecipe.inputType,
+                inputType: originalRecipe.inputType || 'text',
                 tags: [...(originalRecipe.tags || [])],
                 pinned: false
             };
@@ -2060,6 +2052,12 @@ let editingRecipeId = null;
 let formValidationState = {};
 let isEnhancing = false;
 let currentEnhancement = null;
+// Response history state
+let responseHistory = new Map();
+let currentHistoryIndex = -1;
+// Performance optimization state
+let responseCache = new Map();
+let streamingAnimationFrame = null;
 /**
  * Initialize the side panel
  */
@@ -2152,9 +2150,6 @@ function setupEventListeners() {
     executeRecipeBtn?.addEventListener('click', handleRecipeExecution);
     copyResultBtn?.addEventListener('click', copyResult);
     clearResultBtn?.addEventListener('click', clearResult);
-    // Input type change
-    const inputTypeSelect = document.getElementById('recipe-input-type');
-    inputTypeSelect?.addEventListener('change', handleInputTypeChange);
     // Search functionality
     searchInput?.addEventListener('input', debounce(handleSearch, 300));
     sortSelect?.addEventListener('change', handleSortChange);
@@ -2175,6 +2170,8 @@ function setupEventListeners() {
     closeEnhancementBtn?.addEventListener('click', hideEnhancementUI);
     acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
     rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 /**
  * Load initial state
@@ -2252,8 +2249,7 @@ async function handleRecipeSubmit(event) {
         name: formData.get('name'),
         description: formData.get('description'),
         prompt: formData.get('prompt'),
-        originalPrompt: formData.get('prompt'), // Same as prompt for now
-        inputType: formData.get('inputType')
+        originalPrompt: formData.get('prompt') // Same as prompt for now
     };
     try {
         if (editingRecipeId) {
@@ -2289,19 +2285,6 @@ async function handleRecipeSubmit(event) {
     }
 }
 /**
- * Handle input type change
- */
-function handleInputTypeChange(event) {
-    const select = event.target;
-    const imageSection = document.getElementById('image-input-section');
-    if (select.value === 'image' || select.value === 'both') {
-        imageSection.style.display = 'block';
-    }
-    else {
-        imageSection.style.display = 'none';
-    }
-}
-/**
  * Handle recipe execution
  */
 async function handleRecipeExecution() {
@@ -2314,13 +2297,26 @@ async function handleRecipeExecution() {
         return;
     }
     const userInput = userInputEl.value.trim();
-    if (!userInput) {
-        alert('Please enter some input');
+    const imageInput = document.getElementById('image-input');
+    const imageFile = imageInput?.files?.[0];
+    if (!userInput && !imageFile) {
+        alert('Please provide either text input or an image');
         return;
     }
     if (isExecuting) {
         alert('Recipe is already executing');
         return;
+    }
+    // Check for cached response first
+    if (userInput && !imageFile) {
+        const cacheKey = `${currentRecipe.id}_${userInput}`;
+        const cachedResponse = responseCache.get(cacheKey);
+        if (cachedResponse) {
+            console.log('Using cached response');
+            resultContentEl.textContent = cachedResponse;
+            document.getElementById('execution-result').style.display = 'block';
+            return;
+        }
     }
     // Show loading state
     isExecuting = true;
@@ -2332,11 +2328,14 @@ async function handleRecipeExecution() {
     try {
         console.log('Executing recipe:', currentRecipe.name);
         // Execute recipe with streaming
-        const result = await executeRecipeWithStreaming(currentRecipe, userInput);
+        const result = await executeRecipeWithStreaming(currentRecipe, userInput, imageFile);
         if (result.success) {
-            // Show result
-            resultContentEl.textContent = result.response || '';
+            // Show result (already displayed during streaming)
             document.getElementById('execution-result').style.display = 'block';
+            // Store in response history
+            if (currentRecipe) {
+                addToResponseHistory(currentRecipe.id, userInput, result.response || '', result.executionTime || 0);
+            }
             // Mark recipe as used
             try {
                 await recipeManager.markRecipeAsUsed(currentRecipe.id);
@@ -2364,20 +2363,79 @@ async function handleRecipeExecution() {
 /**
  * Execute recipe with streaming response
  */
-async function executeRecipeWithStreaming(recipe, userInput) {
+async function executeRecipeWithStreaming(recipe, userInput, imageFile) {
     try {
-        // Use content script for AI API calls
-        return await executeWithContentScript(recipe, userInput);
+        // Use streaming execution for better UX
+        return await executeWithStreaming(recipe, userInput, imageFile);
     }
     catch (error) {
-        console.error('Content script execution failed:', error);
+        console.error('Streaming execution failed:', error);
         throw error;
     }
 }
 /**
- * Execute recipe using direct AI access
+ * Execute recipe with streaming response
  */
-async function executeWithContentScript(recipe, userInput) {
+async function executeWithStreaming(recipe, userInput, imageFile) {
+    try {
+        console.log('Executing recipe with streaming:', recipe.name);
+        // Use proper prompt interpolation with sanitization
+        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+            maxLength: 10000,
+            allowHtml: false,
+            escapeSpecialChars: true
+        });
+        // Log image file if provided (for future implementation)
+        if (imageFile) {
+            console.log('Image file provided:', imageFile.name, imageFile.size, 'bytes');
+        }
+        console.log('Interpolated prompt:', interpolatedPrompt);
+        // Check if AI is available
+        const aiWindow = window;
+        if (!aiWindow.LanguageModel) {
+            throw new Error('Chrome AI API not available');
+        }
+        // Create AI session
+        const session = await aiWindow.LanguageModel.create({
+            temperature: 0.7,
+            topK: 40
+        });
+        try {
+            // Show typing indicator
+            showTypingIndicator();
+            // Execute streaming prompt
+            const stream = session.promptStreaming(interpolatedPrompt);
+            let fullResponse = '';
+            // Process streaming response
+            for await (const chunk of stream) {
+                fullResponse += chunk;
+                // Update UI with new chunk
+                updateStreamingResponse(fullResponse);
+            }
+            // Hide typing indicator
+            hideTypingIndicator();
+            session.destroy();
+            console.log('Streaming execution successful');
+            return {
+                success: true,
+                response: fullResponse
+            };
+        }
+        catch (error) {
+            hideTypingIndicator();
+            session.destroy();
+            throw error;
+        }
+    }
+    catch (error) {
+        console.error('Streaming execution failed:', error);
+        throw error;
+    }
+}
+/**
+ * Execute recipe using direct AI access (fallback)
+ */
+async function executeWithContentScript(recipe, userInput, imageFile) {
     try {
         console.log('Executing recipe via direct AI access:', recipe.name);
         // Use proper prompt interpolation with sanitization
@@ -2386,6 +2444,10 @@ async function executeWithContentScript(recipe, userInput) {
             allowHtml: false,
             escapeSpecialChars: true
         });
+        // Log image file if provided (for future implementation)
+        if (imageFile) {
+            console.log('Image file provided:', imageFile.name, imageFile.size, 'bytes');
+        }
         console.log('Interpolated prompt:', interpolatedPrompt);
         // Check if AI is available
         const aiWindow = window;
@@ -2416,6 +2478,82 @@ async function executeWithContentScript(recipe, userInput) {
         console.error('Direct AI execution failed:', error);
         throw error;
     }
+}
+/**
+ * Show typing indicator during streaming
+ */
+function showTypingIndicator() {
+    const typingHtml = `
+        <div class="typing-indicator">
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <span class="typing-text">AI is thinking...</span>
+        </div>
+    `;
+    resultContentEl.innerHTML = typingHtml;
+    document.getElementById('execution-result').style.display = 'block';
+}
+/**
+ * Hide typing indicator
+ */
+function hideTypingIndicator() {
+    const typingIndicator = resultContentEl.querySelector('.typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
+}
+/**
+ * Update streaming response with new content (optimized with requestAnimationFrame)
+ */
+function updateStreamingResponse(response) {
+    // Cancel previous animation frame if still pending
+    if (streamingAnimationFrame) {
+        cancelAnimationFrame(streamingAnimationFrame);
+    }
+    // Use requestAnimationFrame for smooth updates
+    streamingAnimationFrame = requestAnimationFrame(() => {
+        // Format the response with markdown support
+        const formattedResponse = formatResponse(response);
+        // Update the content
+        resultContentEl.innerHTML = formattedResponse;
+        document.getElementById('execution-result').style.display = 'block';
+        // Scroll to bottom to show latest content
+        const executionResult = document.getElementById('execution-result');
+        if (executionResult) {
+            executionResult.scrollTop = executionResult.scrollHeight;
+        }
+        streamingAnimationFrame = null;
+    });
+}
+/**
+ * Format response with markdown and code highlighting
+ */
+function formatResponse(response) {
+    // Basic markdown formatting
+    let formatted = response
+        // Code blocks
+        .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Bold text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // Italic text
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+    // Escape HTML in non-code sections
+    formatted = escapeHtml(formatted);
+    // Re-apply code formatting after escaping
+    formatted = formatted
+        .replace(/&lt;pre&gt;&lt;code class="language-([^"]*)"&gt;([\s\S]*?)&lt;\/code&gt;&lt;\/pre&gt;/g, '<pre><code class="language-$1">$2</code></pre>')
+        .replace(/&lt;code&gt;([^&]*)&lt;\/code&gt;/g, '<code>$1</code>')
+        .replace(/&lt;strong&gt;([^&]*)&lt;\/strong&gt;/g, '<strong>$1</strong>')
+        .replace(/&lt;em&gt;([^&]*)&lt;\/em&gt;/g, '<em>$1</em>')
+        .replace(/&lt;br&gt;/g, '<br>');
+    return formatted;
 }
 /**
  * Show execution error
@@ -2450,9 +2588,17 @@ async function copyResult() {
             return;
         }
         await navigator.clipboard.writeText(resultText);
-        copyResultBtn.textContent = 'Copied!';
+        // Show visual feedback by changing the icon temporarily
+        const originalIcon = copyResultBtn.innerHTML;
+        copyResultBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20,6 9,17 4,12"></polyline>
+            </svg>
+        `;
+        copyResultBtn.style.color = '#4CAF50'; // Green color for success
         setTimeout(() => {
-            copyResultBtn.textContent = 'Copy Result';
+            copyResultBtn.innerHTML = originalIcon;
+            copyResultBtn.style.color = ''; // Reset to default color
         }, 2000);
     }
     catch (error) {
@@ -2529,7 +2675,6 @@ function renderRecipeList() {
             </div>
             <p class="recipe-description">${escapeHtml(recipe.description || 'No description')}</p>
             <div class="recipe-meta">
-                <span class="recipe-type">${recipe.inputType}</span>
                 ${recipe.lastUsedAt ? `<span class="recipe-last-used">Last used: ${formatDate(recipe.lastUsedAt)}</span>` : ''}
                 <span class="recipe-created">Created: ${formatDate(recipe.createdAt)}</span>
             </div>
@@ -2537,7 +2682,13 @@ function renderRecipeList() {
     `).join('');
     recipeListEl.innerHTML = `
                 <div class="search-container">
-                <input type="text" id="search-recipes" placeholder="Search recipes..." class="search-input">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="search-recipes" placeholder="Search recipes..." class="search-input">
+                </div>
             </div>
             <br>    
     <div class="recipe-list-header">
@@ -2551,9 +2702,9 @@ function renderRecipeList() {
                 </select>
             </div>
             <div class="new-recipe-container">
-                <button id="create-recipe-btn" class="btn btn-primary"> <svg class="w-[12px] h-[12px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7.757v8.486M7.757 12h8.486M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-</svg> 
+                <button id="create-recipe-btn" class="btn btn-primary"> <svg class="w-[9px] h-[9px] text-gray-800" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 7.757v8.486M7.757 12h8.486M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+</svg>&nbsp;
 New Recipe</button>
             </div>
         </div>
@@ -2696,7 +2847,6 @@ function renderFilteredRecipeList(recipes) {
             </div>
             <p class="recipe-description">${escapeHtml(recipe.description || 'No description')}</p>
             <div class="recipe-meta">
-                <span class="recipe-type">${recipe.inputType}</span>
                 ${recipe.lastUsedAt ? `<span class="recipe-last-used">Last used: ${formatDate(recipe.lastUsedAt)}</span>` : ''}
                 <span class="recipe-created">Created: ${formatDate(recipe.createdAt)}</span>
             </div>
@@ -2795,16 +2945,7 @@ function showRecipeExecution() {
     if (executionRecipeDescription) {
         executionRecipeDescription.textContent = currentRecipe.description || 'No description';
     }
-    // Show/hide image input based on recipe type
-    const imageSection = document.getElementById('image-input-section');
-    if (imageSection) {
-        if (currentRecipe.inputType === 'image' || currentRecipe.inputType === 'both') {
-            imageSection.style.display = 'block';
-        }
-        else {
-            imageSection.style.display = 'none';
-        }
-    }
+    // Image input is always visible now
     // Clear previous input
     if (userInputEl) {
         userInputEl.value = '';
@@ -2814,6 +2955,8 @@ function showRecipeExecution() {
     if (executionResult) {
         executionResult.style.display = 'none';
     }
+    // Initialize response history UI
+    updateResponseHistoryUI();
 }
 /**
  * Utility function to escape HTML
@@ -2861,21 +3004,12 @@ function populateFormWithRecipe(recipe) {
     const nameInput = document.getElementById('recipe-name');
     const descriptionInput = document.getElementById('recipe-description');
     const promptInput = document.getElementById('recipe-prompt');
-    const inputTypeSelect = document.getElementById('recipe-input-type');
     if (nameInput)
         nameInput.value = recipe.name;
     if (descriptionInput)
         descriptionInput.value = recipe.description;
     if (promptInput)
         promptInput.value = recipe.prompt;
-    if (inputTypeSelect)
-        inputTypeSelect.value = recipe.inputType;
-    // Trigger input type change to show/hide image section
-    if (inputTypeSelect) {
-        const event = new Event('change');
-        Object.defineProperty(event, 'target', { value: inputTypeSelect });
-        handleInputTypeChange(event);
-    }
 }
 /**
  * Set up real-time form validation
@@ -2884,7 +3018,6 @@ function setupFormValidation() {
     const nameInput = document.getElementById('recipe-name');
     const descriptionInput = document.getElementById('recipe-description');
     const promptInput = document.getElementById('recipe-prompt');
-    const inputTypeSelect = document.getElementById('recipe-input-type');
     // Add event listeners for real-time validation
     if (nameInput) {
         nameInput.addEventListener('input', () => validateField('name', nameInput.value));
@@ -2897,9 +3030,6 @@ function setupFormValidation() {
     if (promptInput) {
         promptInput.addEventListener('input', () => validateField('prompt', promptInput.value));
         promptInput.addEventListener('blur', () => validateField('prompt', promptInput.value));
-    }
-    if (inputTypeSelect) {
-        inputTypeSelect.addEventListener('change', () => validateField('inputType', inputTypeSelect.value));
     }
 }
 /**
@@ -2947,13 +3077,6 @@ function validateField(fieldName, value) {
                 errorMessage = 'Prompt must be no more than 10,000 characters long';
             }
             break;
-        case 'inputType':
-            const validTypes = ['text', 'image', 'both'];
-            if (!validTypes.includes(value)) {
-                isValid = false;
-                errorMessage = 'Please select a valid input type';
-            }
-            break;
     }
     // Update validation state
     formValidationState[fieldName] = isValid;
@@ -2991,7 +3114,7 @@ function showFieldValidationError(fieldName, isValid, errorMessage) {
  * Clear all form validation errors
  */
 function clearFormValidationErrors() {
-    const fields = ['name', 'description', 'prompt', 'inputType'];
+    const fields = ['name', 'description', 'prompt'];
     fields.forEach(fieldName => {
         const field = document.getElementById(`recipe-${fieldName}`);
         if (field) {
@@ -3010,12 +3133,10 @@ function validateForm() {
     const nameInput = document.getElementById('recipe-name');
     const descriptionInput = document.getElementById('recipe-description');
     const promptInput = document.getElementById('recipe-prompt');
-    const inputTypeSelect = document.getElementById('recipe-input-type');
     const nameValid = validateField('name', nameInput?.value || '');
     const descriptionValid = validateField('description', descriptionInput?.value || '');
     const promptValid = validateField('prompt', promptInput?.value || '');
-    const inputTypeValid = validateField('inputType', inputTypeSelect?.value || '');
-    return nameValid && descriptionValid && promptValid && inputTypeValid;
+    return nameValid && descriptionValid && promptValid;
 }
 /**
  * Update submit button state based on validation
@@ -3028,17 +3149,15 @@ function updateSubmitButtonState() {
     const nameInput = document.getElementById('recipe-name');
     const descriptionInput = document.getElementById('recipe-description');
     const promptInput = document.getElementById('recipe-prompt');
-    const inputTypeSelect = document.getElementById('recipe-input-type');
     // Check if all required fields have values
     const hasName = nameInput?.value.trim().length > 0;
     const hasDescription = descriptionInput?.value.trim().length > 0;
     const hasPrompt = promptInput?.value.trim().length > 0;
-    const hasInputType = inputTypeSelect?.value && inputTypeSelect.value !== '';
     // Check if any field has validation errors (only if validation state exists)
     const hasValidationErrors = Object.keys(formValidationState).length > 0 &&
         Object.values(formValidationState).some(valid => valid === false);
     // Enable button if all fields have values and no validation errors
-    submitBtn.disabled = !(hasName && hasDescription && hasPrompt && hasInputType) || hasValidationErrors;
+    submitBtn.disabled = !(hasName && hasDescription && hasPrompt) || hasValidationErrors;
 }
 /**
  * Handle prompt enhancement request
@@ -3211,6 +3330,295 @@ function hideEnhancementUI() {
     }
     currentEnhancement = null;
 }
+/**
+ * Add response to history
+ */
+function addToResponseHistory(recipeId, userInput, response, executionTime) {
+    const historyItem = {
+        id: `history_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        recipeId,
+        userInput,
+        response,
+        timestamp: Date.now(),
+        executionTime
+    };
+    if (!responseHistory.has(recipeId)) {
+        responseHistory.set(recipeId, []);
+    }
+    const recipeHistory = responseHistory.get(recipeId);
+    recipeHistory.unshift(historyItem); // Add to beginning
+    // Keep only last 10 responses per recipe
+    if (recipeHistory.length > 10) {
+        recipeHistory.splice(10);
+    }
+    // Cache the response for quick access
+    const cacheKey = `${recipeId}_${userInput}`;
+    responseCache.set(cacheKey, response);
+    // Limit cache size to prevent memory issues
+    if (responseCache.size > 50) {
+        const firstKey = responseCache.keys().next().value;
+        if (firstKey) {
+            responseCache.delete(firstKey);
+        }
+    }
+    // Update history UI if we're in execution view
+    updateResponseHistoryUI();
+}
+/**
+ * Update response history UI
+ */
+function updateResponseHistoryUI() {
+    if (!currentRecipe)
+        return;
+    const historyContainer = document.getElementById('response-history');
+    if (!historyContainer)
+        return;
+    const recipeHistory = responseHistory.get(currentRecipe.id) || [];
+    if (recipeHistory.length === 0) {
+        historyContainer.style.display = 'none';
+        return;
+    }
+    historyContainer.style.display = 'block';
+    const historyHtml = recipeHistory.map((item, index) => `
+        <div class="history-item ${index === currentHistoryIndex ? 'active' : ''}" 
+             data-history-id="${item.id}">
+            <div class="history-content" onclick="loadHistoryItem('${item.id}')">
+                <div class="history-meta">
+                    ${formatDate(item.timestamp)} • ${Math.round(item.executionTime)}ms
+                </div>
+                <div class="history-preview">
+                    ${escapeHtml(item.userInput.substring(0, 100))}${item.userInput.length > 100 ? '...' : ''}
+                </div>
+            </div>
+            <div class="history-actions">
+                <button class="btn-icon history-copy-btn" 
+                        data-history-id="${item.id}" 
+                        title="Copy response"
+                        onclick="event.stopPropagation(); copyHistoryResponse('${item.id}')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `).join('');
+    historyContainer.innerHTML = `
+        <h4>Recent Responses</h4>
+        ${historyHtml}
+    `;
+}
+/**
+ * Load a history item
+ */
+function loadHistoryItem(historyId) {
+    if (!currentRecipe)
+        return;
+    const recipeHistory = responseHistory.get(currentRecipe.id) || [];
+    const historyItem = recipeHistory.find(item => item.id === historyId);
+    if (!historyItem)
+        return;
+    // Update current history index
+    currentHistoryIndex = recipeHistory.indexOf(historyItem);
+    // Load the response
+    resultContentEl.textContent = historyItem.response;
+    document.getElementById('execution-result').style.display = 'block';
+    // Update history UI
+    updateResponseHistoryUI();
+}
+/**
+ * Copy response from history item
+ */
+async function copyHistoryResponse(historyId) {
+    if (!currentRecipe)
+        return;
+    const recipeHistory = responseHistory.get(currentRecipe.id) || [];
+    const historyItem = recipeHistory.find(item => item.id === historyId);
+    if (!historyItem) {
+        alert('Response not found');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(historyItem.response);
+        // Show feedback on the copy button
+        const copyBtn = document.querySelector(`[data-history-id="${historyId}"].history-copy-btn`);
+        if (copyBtn) {
+            const originalTitle = copyBtn.title;
+            copyBtn.title = 'Copied!';
+            copyBtn.style.color = '#4CAF50';
+            setTimeout(() => {
+                copyBtn.title = originalTitle;
+                copyBtn.style.color = '';
+            }, 2000);
+        }
+    }
+    catch (error) {
+        console.error('Failed to copy response:', error);
+        alert('Failed to copy response');
+    }
+}
+/**
+ * Clear response history for current recipe
+ */
+function clearResponseHistory() {
+    if (!currentRecipe)
+        return;
+    responseHistory.delete(currentRecipe.id);
+    currentHistoryIndex = -1;
+    updateResponseHistoryUI();
+}
+/**
+ * Handle keyboard shortcuts
+ */
+function handleKeyboardShortcuts(event) {
+    // Don't trigger shortcuts when typing in input fields
+    const target = event.target;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
+        return;
+    }
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
+    switch (event.key.toLowerCase()) {
+        case 'k':
+            if (ctrlKey) {
+                event.preventDefault();
+                focusSearchInput();
+            }
+            break;
+        case 'escape':
+            event.preventDefault();
+            handleEscapeKey();
+            break;
+        case 'enter':
+            if (ctrlKey) {
+                event.preventDefault();
+                handleCtrlEnter();
+            }
+            break;
+        case '?':
+            if (ctrlKey) {
+                event.preventDefault();
+                showShortcutsHelp();
+            }
+            break;
+    }
+}
+/**
+ * Focus search input (Ctrl/Cmd + K)
+ */
+function focusSearchInput() {
+    if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+    }
+}
+/**
+ * Handle Escape key
+ */
+function handleEscapeKey() {
+    // Close any open dialogs or modals
+    const enhancementUI = document.getElementById('enhancement-ui');
+    if (enhancementUI && enhancementUI.style.display !== 'none') {
+        hideEnhancementUI();
+        return;
+    }
+    const shortcutsHelp = document.getElementById('shortcuts-help');
+    if (shortcutsHelp && shortcutsHelp.classList.contains('show')) {
+        hideShortcutsHelp();
+        return;
+    }
+    // If in execution view, go back to list
+    if (recipeExecutionEl.style.display !== 'none') {
+        showRecipeList();
+        return;
+    }
+    // If in form view, go back to list
+    if (recipeFormEl.style.display !== 'none') {
+        showRecipeList();
+        return;
+    }
+}
+/**
+ * Handle Ctrl/Cmd + Enter
+ */
+function handleCtrlEnter() {
+    // If in execution view, execute recipe
+    if (recipeExecutionEl.style.display !== 'none' && !isExecuting) {
+        handleRecipeExecution();
+        return;
+    }
+    // If in form view, submit form
+    if (recipeFormEl.style.display !== 'none') {
+        const submitBtn = recipeForm.querySelector('button[type="submit"]');
+        if (submitBtn && !submitBtn.disabled) {
+            recipeForm.dispatchEvent(new Event('submit'));
+        }
+        return;
+    }
+}
+/**
+ * Show keyboard shortcuts help
+ */
+function showShortcutsHelp() {
+    const shortcutsHelp = document.getElementById('shortcuts-help');
+    if (!shortcutsHelp) {
+        createShortcutsHelp();
+    }
+    else {
+        shortcutsHelp.classList.add('show');
+    }
+}
+/**
+ * Hide keyboard shortcuts help
+ */
+function hideShortcutsHelp() {
+    const shortcutsHelp = document.getElementById('shortcuts-help');
+    if (shortcutsHelp) {
+        shortcutsHelp.classList.remove('show');
+    }
+}
+/**
+ * Create keyboard shortcuts help modal
+ */
+function createShortcutsHelp() {
+    const shortcutsHelp = document.createElement('div');
+    shortcutsHelp.id = 'shortcuts-help';
+    shortcutsHelp.className = 'shortcuts-help';
+    shortcutsHelp.innerHTML = `
+        <h3>Keyboard Shortcuts</h3>
+        <div class="shortcut-item">
+            <span class="shortcut-key">${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘' : 'Ctrl'}+K</span>
+            <span class="shortcut-description">Focus search</span>
+        </div>
+        <div class="shortcut-item">
+            <span class="shortcut-key">Esc</span>
+            <span class="shortcut-description">Close dialogs / Go back</span>
+        </div>
+        <div class="shortcut-item">
+            <span class="shortcut-key">${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘' : 'Ctrl'}+Enter</span>
+            <span class="shortcut-description">Execute recipe / Submit form</span>
+        </div>
+        <div class="shortcut-item">
+            <span class="shortcut-key">${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘' : 'Ctrl'}+?</span>
+            <span class="shortcut-description">Show this help</span>
+        </div>
+        <div style="margin-top: 16px; text-align: center;">
+            <button onclick="hideShortcutsHelp()" class="btn btn-secondary">Close</button>
+        </div>
+    `;
+    document.body.appendChild(shortcutsHelp);
+    shortcutsHelp.classList.add('show');
+    // Close on outside click
+    shortcutsHelp.addEventListener('click', (e) => {
+        if (e.target === shortcutsHelp) {
+            hideShortcutsHelp();
+        }
+    });
+}
+// Make functions globally available for onclick handlers
+window.loadHistoryItem = loadHistoryItem;
+window.copyHistoryResponse = copyHistoryResponse;
+window.hideShortcutsHelp = hideShortcutsHelp;
 // Initialize when DOM is loaded
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize);

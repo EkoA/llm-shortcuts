@@ -20,8 +20,8 @@ export interface Recipe {
     prompt: string;
     /** User's original prompt before enhancement */
     originalPrompt: string;
-    /** Type of input this recipe accepts */
-    inputType: RecipeInputType;
+    /** Type of input this recipe accepts (optional - will be determined dynamically) */
+    inputType?: RecipeInputType;
     /** When the recipe was created */
     createdAt: number;
     /** When the recipe was last executed */
@@ -39,7 +39,7 @@ export interface CreateRecipeData {
     description: string;
     prompt: string;
     originalPrompt: string;
-    inputType: RecipeInputType;
+    inputType?: RecipeInputType;
     tags?: string[];
     pinned?: boolean;
 }

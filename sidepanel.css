@@ -128,6 +128,7 @@ body {
     display: flex;
     flex-direction: row;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
     margin-bottom: 16px;
     padding-bottom: 12px;
@@ -138,9 +139,23 @@ body {
     flex: 1;
 }
 
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    color: #808080;
+    pointer-events: none;
+    z-index: 1;
+}
+
 .search-input {
     width: 100%;
-    padding: 8px 12px;
+    padding: 8px 12px 8px 40px;
     border: none;
     border-radius: 15px;
     font-size: 14px;
@@ -150,7 +165,7 @@ body {
 }
 
 .search-input:focus {
-    outline: none;
+    outline: 3px solid #3A3A3A;
     background: #3A3A3A;
 }
 
@@ -242,6 +257,44 @@ body {
 
 .btn-icon:hover {
     background-color: #3A3A3A;
+}
+
+/* Copy result button specific styling */
+#copy-result {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+#copy-result:hover {
+    background-color: #3A3A3A;
+    transform: scale(1.05);
+}
+
+#copy-result svg {
+    transition: all 0.2s ease;
+}
+
+/* Clear result button specific styling */
+#clear-result {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+#clear-result:hover {
+    background-color: #3A3A3A;
+    transform: scale(1.05);
+}
+
+#clear-result svg {
+    transition: all 0.2s ease;
 }
 
 .recipe-description {
@@ -529,25 +582,7 @@ button[type="submit"]:disabled:hover {
     gap: 8px;
 }
 
-.loading::after {
-    content: '';
-    width: 16px;
-    height: 16px;
-    border: 2px solid currentColor;
-    border-top: 2px solid transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
 
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
 
 /* Prompt Enhancement UI */
 .prompt-input-container {
@@ -687,6 +722,245 @@ button[type="submit"]:disabled:hover {
     color: #ff6b6b;
     font-size: 12px;
     margin-bottom: 16px;
+}
+
+/* Streaming response styles */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #1A1A1A;
+    border-radius: 6px;
+    border: 1px solid #3A3A3A;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    background: #4285F4;
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0s;
+}
+
+@keyframes typing {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.typing-text {
+    color: #B0B0B0;
+    font-size: 14px;
+}
+
+/* Response formatting with markdown support */
+.result-content pre {
+    background: #1A1A1A;
+    border: 1px solid #3A3A3A;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.result-content code {
+    background: #1A1A1A;
+    border: 1px solid #3A3A3A;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    color: #E0E0E0;
+}
+
+.result-content pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+.result-content strong {
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.result-content em {
+    font-style: italic;
+    color: #D0D0D0;
+}
+
+/* Streaming animation for content updates */
+.result-content {
+    transition: all 0.2s ease;
+}
+
+.result-content.updating {
+    opacity: 0.8;
+}
+
+/* Response history styles */
+.response-history {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #3A3A3A;
+}
+
+.response-history h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin-bottom: 12px;
+}
+
+.history-item {
+    background: #1A1A1A;
+    border: 1px solid #3A3A3A;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.history-item:hover {
+    background: #2A2A2A;
+    border-color: #4A4A4A;
+}
+
+.history-item.active {
+    background: #2A3A5A;
+    border-color: #4285F4;
+}
+
+.history-meta {
+    font-size: 12px;
+    color: #B0B0B0;
+    margin-bottom: 8px;
+}
+
+.history-preview {
+    font-size: 13px;
+    color: #E0E0E0;
+    line-height: 1.4;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-content {
+    flex: 1;
+    cursor: pointer;
+}
+
+.history-actions {
+    margin-left: 12px;
+    display: flex;
+    align-items: center;
+}
+
+.history-copy-btn {
+    background: transparent;
+    border: none;
+    color: #B0B0B0;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.history-copy-btn:hover {
+    background: #3A3A3A;
+    color: #FFFFFF;
+}
+
+/* Keyboard shortcuts help */
+.shortcuts-help {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1E1E1E;
+    border: 1px solid #3A3A3A;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 400px;
+    z-index: 1000;
+    display: none;
+}
+
+.shortcuts-help.show {
+    display: block;
+}
+
+.shortcuts-help h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin-bottom: 16px;
+}
+
+.shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #3A3A3A;
+}
+
+.shortcut-item:last-child {
+    border-bottom: none;
+}
+
+.shortcut-key {
+    background: #2A2A2A;
+    border: 1px solid #4A4A4A;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    color: #FFFFFF;
+}
+
+.shortcut-description {
+    font-size: 14px;
+    color: #B0B0B0;
 }
 
 /* Responsive */

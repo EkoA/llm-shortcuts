@@ -81,7 +81,7 @@ export class RecipeManager {
                 description: data.description.trim(),
                 prompt: data.prompt.trim(),
                 originalPrompt: data.originalPrompt.trim(),
-                inputType: data.inputType,
+                inputType: data.inputType || 'text', // Default to text if not specified
                 tags: data.tags || [],
                 pinned: data.pinned || false,
                 createdAt: Date.now(),
@@ -348,7 +348,8 @@ export class RecipeManager {
 
             // Calculate statistics
             for (const recipe of recipes) {
-                stats.recipesByInputType[recipe.inputType]++;
+                const inputType = recipe.inputType || 'text'; // Default to text if not specified
+                stats.recipesByInputType[inputType]++;
 
                 if (recipe.pinned) {
                     stats.pinnedRecipes++;
@@ -419,7 +420,7 @@ export class RecipeManager {
                 description: originalRecipe.description,
                 prompt: originalRecipe.prompt,
                 originalPrompt: originalRecipe.originalPrompt,
-                inputType: originalRecipe.inputType,
+                inputType: originalRecipe.inputType || 'text',
                 tags: [...(originalRecipe.tags || [])],
                 pinned: false
             };
