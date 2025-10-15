@@ -2536,10 +2536,11 @@ function renderRecipeList() {
         </div>
     `).join('');
     recipeListEl.innerHTML = `
-        <div class="recipe-list-header">
-            <div class="search-container">
+                <div class="search-container">
                 <input type="text" id="search-recipes" placeholder="Search recipes..." class="search-input">
             </div>
+            <br>    
+    <div class="recipe-list-header">
             <div class="sort-container">
                 <select id="sort-recipes" class="sort-select">
                     <option value="name-asc">Name (A-Z)</option>
@@ -2549,6 +2550,12 @@ function renderRecipeList() {
                     <option value="lastUsed-desc">Recently Used</option>
                 </select>
             </div>
+            <div class="new-recipe-container">
+                <button id="create-recipe-btn" class="btn btn-primary"> <svg class="w-[12px] h-[12px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7.757v8.486M7.757 12h8.486M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+</svg> 
+New Recipe</button>
+            </div>
         </div>
         <div class="recipe-list-content">
             ${recipesHtml}
@@ -2557,6 +2564,7 @@ function renderRecipeList() {
     // Re-attach event listeners for search and sort
     const newSearchInput = document.getElementById('search-recipes');
     const newSortSelect = document.getElementById('sort-recipes');
+    const newCreateBtn = document.getElementById('create-recipe-btn');
     if (newSearchInput) {
         searchInput = newSearchInput;
         newSearchInput.addEventListener('input', debounce(handleSearch, 300));
@@ -2564,6 +2572,9 @@ function renderRecipeList() {
     if (newSortSelect) {
         sortSelect = newSortSelect;
         newSortSelect.addEventListener('change', handleSortChange);
+    }
+    if (newCreateBtn) {
+        newCreateBtn.addEventListener('click', showRecipeForm);
     }
 }
 /**
@@ -2663,18 +2674,18 @@ function renderFilteredRecipeList(recipes) {
                 <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
                 <div class="recipe-actions">
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5,3 19,12 5,21"></polygon>
                         </svg>
                     </button>
                     <button class="btn-icon" data-action="edit" title="Edit Recipe">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                         </svg>
                     </button>
                     <button class="btn-icon" data-action="delete" title="Delete Recipe">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="3,6 5,6 21,6"></polyline>
                             <path d="M19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
                             <line x1="10" y1="11" x2="10" y2="17"></line>
