@@ -165,7 +165,7 @@ body {
 }
 
 .search-input:focus {
-    outline: 3px solid #3A3A3A;
+    outline: 1px solid #4285F4;
     background: #3A3A3A;
 }
 

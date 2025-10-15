@@ -165,7 +165,7 @@ body {
 }
 
 .search-input:focus {
-    outline: 3px solid #3A3A3A;
+    outline: 2px solid #4285F4;
     background: #3A3A3A;
 }
 
@@ -582,25 +582,7 @@ button[type="submit"]:disabled:hover {
     gap: 8px;
 }
 
-.loading::after {
-    content: '';
-    width: 16px;
-    height: 16px;
-    border: 2px solid currentColor;
-    border-top: 2px solid transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
 
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
 
 /* Prompt Enhancement UI */
 .prompt-input-container {

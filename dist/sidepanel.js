@@ -87,9 +87,7 @@ async function checkAIAvailabilityDirect() {
         console.log('✓ AI is available in sidepanel!');
         statusEl.innerHTML = `
         <div class="success">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-            <polyline points="20,6 9,17 4,12"></polyline>
-          </svg> AI is available and working
+          AI is available and working
         </div>
       `;
         aiStatusEl.className = 'ai-status success';
@@ -102,11 +100,7 @@ async function checkAIAvailabilityDirect() {
         const chromeVersion = navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || 'Unknown';
         statusEl.innerHTML = `
       <div class="error">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="15" y1="9" x2="9" y2="15"></line>
-          <line x1="9" y1="9" x2="15" y2="15"></line>
-        </svg> AI not available: ${errorMessage}
+        AI not available: ${errorMessage}
         <br><small>Current Chrome version: ${chromeVersion}</small>
         <br><small>Required: Chrome 127+ with AI features enabled</small>
         <br><small>Please check these Chrome flags:</small>
