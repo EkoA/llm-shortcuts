@@ -306,7 +306,7 @@ async function handleRecipeExecution() {
         const cachedResponse = responseCache.get(cacheKey);
         if (cachedResponse) {
             console.log('Using cached response');
-            resultContentEl.textContent = cachedResponse;
+            resultContentEl.innerHTML = formatResponse(cachedResponse);
             document.getElementById('execution-result').style.display = 'block';
             return;
         }
@@ -522,30 +522,93 @@ function updateStreamingResponse(response) {
     });
 }
 /**
- * Format response with markdown and code highlighting
+ * Format response with rich markdown support
  */
 function formatResponse(response) {
-    // Basic markdown formatting
-    let formatted = response
-        // Code blocks
+    // First, escape HTML to prevent XSS
+    let formatted = escapeHtml(response);
+    // Process code blocks first (before other formatting)
+    formatted = formatted
+        // Code blocks with language specification
         .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
         // Inline code
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Process headers (must be before other formatting)
+    formatted = formatted
+        // H1 headers
+        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+        // H2 headers
+        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+        // H3 headers
+        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+        // H4 headers
+        .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+        // H5 headers
+        .replace(/^##### (.*$)/gm, '<h5>$1</h5>')
+        // H6 headers
+        .replace(/^###### (.*$)/gm, '<h6>$1</h6>');
+    // Process lists
+    formatted = formatted
+        // Unordered lists
+        .replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>')
+        // Ordered lists
+        .replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>');
+    // Wrap consecutive list items in ul/ol tags
+    formatted = formatted
+        .replace(/(<li>.*<\/li>)(\s*<li>.*<\/li>)*/g, (match) => {
+        const listItems = match.match(/<li>.*?<\/li>/g);
+        if (listItems) {
+            return '<ul>' + listItems.join('') + '</ul>';
+        }
+        return match;
+    });
+    // Process blockquotes
+    formatted = formatted
+        .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+    // Process horizontal rules
+    formatted = formatted
+        .replace(/^---$/gm, '<hr>')
+        .replace(/^\*\*\*$/gm, '<hr>')
+        .replace(/^___$/gm, '<hr>');
+    // Process links
+    formatted = formatted
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Process text formatting
+    formatted = formatted
         // Bold text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         // Italic text
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        // Line breaks
-        .replace(/\n/g, '<br>');
-    // Escape HTML in non-code sections
-    formatted = escapeHtml(formatted);
-    // Re-apply code formatting after escaping
+        // Strikethrough
+        .replace(/~~(.*?)~~/g, '<del>$1</del>')
+        // Underline (not standard markdown but useful)
+        .replace(/__(.*?)__/g, '<u>$1</u>');
+    // Process line breaks and paragraphs
     formatted = formatted
-        .replace(/&lt;pre&gt;&lt;code class="language-([^"]*)"&gt;([\s\S]*?)&lt;\/code&gt;&lt;\/pre&gt;/g, '<pre><code class="language-$1">$2</code></pre>')
-        .replace(/&lt;code&gt;([^&]*)&lt;\/code&gt;/g, '<code>$1</code>')
-        .replace(/&lt;strong&gt;([^&]*)&lt;\/strong&gt;/g, '<strong>$1</strong>')
-        .replace(/&lt;em&gt;([^&]*)&lt;\/em&gt;/g, '<em>$1</em>')
-        .replace(/&lt;br&gt;/g, '<br>');
+        // Convert double line breaks to paragraphs
+        .replace(/\n\n/g, '</p><p>')
+        // Convert single line breaks to <br>
+        .replace(/\n/g, '<br>')
+        // Wrap in paragraph tags
+        .replace(/^(.*)$/gm, '<p>$1</p>')
+        // Clean up empty paragraphs
+        .replace(/<p><\/p>/g, '')
+        .replace(/<p><br><\/p>/g, '');
+    // Clean up code blocks that got wrapped in paragraphs
+    formatted = formatted
+        .replace(/<p><pre>/g, '<pre>')
+        .replace(/<\/pre><\/p>/g, '</pre>')
+        .replace(/<p><code>/g, '<code>')
+        .replace(/<\/code><\/p>/g, '</code>')
+        .replace(/<p><blockquote>/g, '<blockquote>')
+        .replace(/<\/blockquote><\/p>/g, '</blockquote>')
+        .replace(/<p><hr><\/p>/g, '<hr>')
+        .replace(/<p><ul>/g, '<ul>')
+        .replace(/<\/ul><\/p>/g, '</ul>')
+        .replace(/<p><li>/g, '<li>')
+        .replace(/<\/li><\/p>/g, '</li>')
+        .replace(/<p><h[1-6]>/g, '<h$1>')
+        .replace(/<\/h[1-6]><\/p>/g, '</h$1>');
     return formatted;
 }
 /**
@@ -575,29 +638,85 @@ function retryExecution() {
  */
 async function copyResult() {
     try {
+        if (!resultContentEl.innerHTML.trim()) {
+            alert('No result to copy');
+            return;
+        }
+        // Try modern Clipboard API first
+        try {
+            // Create a temporary div to hold the formatted content
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = resultContentEl.innerHTML;
+            // Try to copy as HTML using Clipboard API
+            const clipboardData = new ClipboardItem({
+                'text/html': new Blob([resultContentEl.innerHTML], { type: 'text/html' }),
+                'text/plain': new Blob([resultContentEl.textContent || ''], { type: 'text/plain' })
+            });
+            await navigator.clipboard.write([clipboardData]);
+            // Visual feedback
+            showCopySuccess();
+            return;
+        }
+        catch (clipboardError) {
+            console.log('Clipboard API failed, trying fallback:', clipboardError);
+        }
+        // Fallback 1: Try document.execCommand for rich text
+        try {
+            // Create a temporary div to hold the formatted content
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = resultContentEl.innerHTML;
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            document.body.appendChild(tempDiv);
+            // Create a range and select the content
+            const range = document.createRange();
+            range.selectNodeContents(tempDiv);
+            // Create a selection
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            // Copy the selection (this preserves formatting)
+            const successful = document.execCommand('copy');
+            selection?.removeAllRanges();
+            // Clean up
+            document.body.removeChild(tempDiv);
+            if (successful) {
+                showCopySuccess();
+                return;
+            }
+        }
+        catch (execCommandError) {
+            console.log('execCommand failed, falling back to plain text:', execCommandError);
+        }
+        // Fallback 2: Plain text only
         const resultText = resultContentEl.textContent || '';
         if (!resultText.trim()) {
             alert('No result to copy');
             return;
         }
         await navigator.clipboard.writeText(resultText);
-        // Show visual feedback by changing the icon temporarily
-        const originalIcon = copyResultBtn.innerHTML;
-        copyResultBtn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20,6 9,17 4,12"></polyline>
-            </svg>
-        `;
-        copyResultBtn.style.color = '#4CAF50'; // Green color for success
-        setTimeout(() => {
-            copyResultBtn.innerHTML = originalIcon;
-            copyResultBtn.style.color = ''; // Reset to default color
-        }, 2000);
+        showCopySuccess();
     }
     catch (error) {
         console.error('Failed to copy result:', error);
         alert('Failed to copy result');
     }
+}
+/**
+ * Show copy success feedback
+ */
+function showCopySuccess() {
+    const originalIcon = copyResultBtn.innerHTML;
+    copyResultBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20,6 9,17 4,12"></polyline>
+        </svg>
+    `;
+    copyResultBtn.style.color = '#4CAF50'; // Green color for success
+    setTimeout(() => {
+        copyResultBtn.innerHTML = originalIcon;
+        copyResultBtn.style.color = ''; // Reset to default color
+    }, 2000);
 }
 /**
  * Clear result
@@ -1416,7 +1535,7 @@ function loadHistoryItem(historyId) {
     // Update current history index
     currentHistoryIndex = recipeHistory.indexOf(historyItem);
     // Load the response
-    resultContentEl.textContent = historyItem.response;
+    resultContentEl.innerHTML = formatResponse(historyItem.response);
     document.getElementById('execution-result').style.display = 'block';
     // Update history UI
     updateResponseHistoryUI();

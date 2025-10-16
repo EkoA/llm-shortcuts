@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rich Text Formatting Test</title>
+    <link rel="stylesheet" href="sidepanel.css">
+    <style>
+        body {
+            background: #1E1E1E;
+            color: #E0E0E0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #3A3A3A;
+            border-radius: 8px;
+            background: #2A2A2A;
+        }
+
+        .test-title {
+            color: #4A90E2;
+            margin-bottom: 15px;
+        }
+
+        .copy-btn {
+            background: #4A90E2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #357ABD;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <h1>Rich Text Formatting Test</h1>
+        <p>This page tests the rich text formatting capabilities of the LLM Shortcuts extension.</p>
+
+        <div class="test-section">
+            <h2 class="test-title">Headers Test</h2>
+            <div id="headers-test" class="result-content">
+                # Main Title
+                ## Section Title
+                ### Subsection Title
+                #### Small Title
+                ##### Tiny Title
+                ###### Smallest Title
+            </div>
+            <button class="copy-btn" onclick="copyContent('headers-test')">Copy Headers</button>
+        </div>
+
+        <div class="test-section">
+            <h2 class="test-title">Lists Test</h2>
+            <div id="lists-test" class="result-content">
+                Here are some lists:
+
+                - First item
+                - Second item
+                - Third item
+
+                1. Numbered item one
+                2. Numbered item two
+                3. Numbered item three
+            </div>
+            <button class="copy-btn" onclick="copyContent('lists-test')">Copy Lists</button>
+        </div>
+
+        <div class="test-section">
+            <h2 class="test-title">Text Formatting Test</h2>
+            <div id="formatting-test" class="result-content">
+                This text has **bold text**, *italic text*, ~~strikethrough text~~, and __underlined text__.
+
+                Here's some `inline code` and a [link to Google](https://google.com).
+
+                > This is a blockquote with some important information.
+                > It can span multiple lines.
+            </div>
+            <button class="copy-btn" onclick="copyContent('formatting-test')">Copy Formatting</button>
+        </div>
+
+        <div class="test-section">
+            <h2 class="test-title">Code Blocks Test</h2>
+            <div id="code-test" class="result-content">
+                Here's a JavaScript code block:
+
+                ```javascript
+                function formatResponse(response) {
+                return response
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                }
+                ```
+
+                And some `inline code` in a paragraph.
+            </div>
+            <button class="copy-btn" onclick="copyContent('code-test')">Copy Code</button>
+        </div>
+
+        <div class="test-section">
+            <h2 class="test-title">Complex Example</h2>
+            <div id="complex-test" class="result-content">
+                # API Documentation
+
+                ## Overview
+                This API provides endpoints for managing user data.
+
+                ## Endpoints
+
+                ### GET /users
+                Returns a list of all users.
+
+                **Parameters:**
+                - `limit` (optional): Maximum number of users to return
+                - `offset` (optional): Number of users to skip
+
+                **Example Response:**
+                ```json
+                {
+                "users": [
+                {"id": 1, "name": "John Doe"},
+                {"id": 2, "name": "Jane Smith"}
+                ]
+                }
+                ```
+
+                ### POST /users
+                Creates a new user.
+
+                > **Note:** All fields are required.
+
+                **Request Body:**
+                ```json
+                {
+                "name": "string",
+                "email": "string"
+                }
+                ```
+
+                ## Error Handling
+                The API returns standard HTTP status codes:
+                - `200` - Success
+                - `400` - Bad Request
+                - `404` - Not Found
+                - `500` - Internal Server Error
+
+                For more information, visit our [documentation site](https://docs.example.com).
+            </div>
+            <button class="copy-btn" onclick="copyContent('complex-test')">Copy Complex Example</button>
+        </div>
+    </div>
+
+    <script>
+        // Simulate the formatResponse function from the extension
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatResponse(response) {
+            // First, escape HTML to prevent XSS
+            let formatted = escapeHtml(response);
+
+            // Process code blocks first (before other formatting)
+            formatted = formatted
+                // Code blocks with language specification
+                .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Process headers (must be before other formatting)
+            formatted = formatted
+                // H1 headers
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                // H2 headers
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                // H3 headers
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                // H4 headers
+                .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+                // H5 headers
+                .replace(/^##### (.*$)/gm, '<h5>$1</h5>')
+                // H6 headers
+                .replace(/^###### (.*$)/gm, '<h6>$1</h6>');
+
+            // Process lists
+            formatted = formatted
+                // Unordered lists
+                .replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>')
+                // Ordered lists
+                .replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>');
+
+            // Wrap consecutive list items in ul/ol tags
+            formatted = formatted
+                .replace(/(<li>.*<\/li>)(\s*<li>.*<\/li>)*/g, (match) => {
+                    const listItems = match.match(/<li>.*?<\/li>/g);
+                    if (listItems) {
+                        return '<ul>' + listItems.join('') + '</ul>';
+                    }
+                    return match;
+                });
+
+            // Process blockquotes
+            formatted = formatted
+                .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // Process horizontal rules
+            formatted = formatted
+                .replace(/^---$/gm, '<hr>')
+                .replace(/^\*\*\*$/gm, '<hr>')
+                .replace(/^___$/gm, '<hr>');
+
+            // Process links
+            formatted = formatted
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+            // Process text formatting
+            formatted = formatted
+                // Bold text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic text
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Strikethrough
+                .replace(/~~(.*?)~~/g, '<del>$1</del>')
+                // Underline (not standard markdown but useful)
+                .replace(/__(.*?)__/g, '<u>$1</u>');
+
+            // Process line breaks and paragraphs
+            formatted = formatted
+                // Convert double line breaks to paragraphs
+                .replace(/\n\n/g, '</p><p>')
+                // Convert single line breaks to <br>
+                .replace(/\n/g, '<br>')
+                // Wrap in paragraph tags
+                .replace(/^(.*)$/gm, '<p>$1</p>')
+                // Clean up empty paragraphs
+                .replace(/<p><\/p>/g, '')
+                .replace(/<p><br><\/p>/g, '');
+
+            // Clean up code blocks that got wrapped in paragraphs
+            formatted = formatted
+                .replace(/<p><pre>/g, '<pre>')
+                .replace(/<\/pre><\/p>/g, '</pre>')
+                .replace(/<p><code>/g, '<code>')
+                .replace(/<\/code><\/p>/g, '</code>')
+                .replace(/<p><blockquote>/g, '<blockquote>')
+                .replace(/<\/blockquote><\/p>/g, '</blockquote>')
+                .replace(/<p><hr><\/p>/g, '<hr>')
+                .replace(/<p><ul>/g, '<ul>')
+                .replace(/<\/ul><\/p>/g, '</ul>')
+                .replace(/<p><li>/g, '<li>')
+                .replace(/<\/li><\/p>/g, '</li>')
+                .replace(/<p><h[1-6]>/g, '<h$1>')
+                .replace(/<\/h[1-6]><\/p>/g, '</h$1>');
+
+            return formatted;
+        }
+
+        // Format all test content on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            const testElements = document.querySelectorAll('.result-content');
+            testElements.forEach(element => {
+                const originalText = element.textContent;
+                element.innerHTML = formatResponse(originalText);
+            });
+        });
+
+        // Copy function that preserves formatting
+        async function copyContent(elementId) {
+            const element = document.getElementById(elementId);
+            if (!element.innerHTML.trim()) {
+                alert('No content to copy');
+                return;
+            }
+
+            try {
+                // Create a temporary div to hold the formatted content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = element.innerHTML;
+
+                // Create a range and select the content
+                const range = document.createRange();
+                range.selectNodeContents(tempDiv);
+
+                // Create a selection
+                const selection = window.getSelection();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+
+                // Copy the selection (this preserves formatting)
+                const successful = document.execCommand('copy');
+                selection?.removeAllRanges();
+
+                if (successful) {
+                    alert('Content copied with formatting!');
+                } else {
+                    // Fallback to plain text
+                    const plainText = element.textContent || '';
+                    await navigator.clipboard.writeText(plainText);
+                    alert('Content copied as plain text');
+                }
+            } catch (error) {
+                console.error('Copy failed:', error);
+                alert('Failed to copy content');
+            }
+        }
+    </script>
+</body>
+
+</html>
