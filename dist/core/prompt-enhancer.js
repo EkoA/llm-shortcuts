@@ -111,12 +111,14 @@ export class PromptEnhancer {
 IMPORTANT RULES:
 1. Preserve the original intent and purpose of the prompt
 2. If the prompt contains placeholders like {user_input}, {input}, or similar, keep them exactly as they are
-3. Make the prompt more specific and actionable
-4. Add context and constraints that will improve results
-5. Use clear, direct language
-6. Structure the prompt for better AI understanding
-7. Keep the enhanced prompt concise but comprehensive
-8. Do not change the core functionality or expected output format
+3. If the prompt does NOT contain any placeholder for user input, you MUST add {user_input} in the appropriate place where the user's input should be inserted
+4. Make the prompt more specific and actionable
+5. Add context and constraints that will improve results
+6. Use clear, direct language
+7. Structure the prompt for better AI understanding
+8. Keep the enhanced prompt concise but comprehensive
+9. Do not change the core functionality or expected output format
+10. ALWAYS ensure the enhanced prompt includes {user_input} placeholder for user input
 
 Original prompt to enhance:
 "${originalPrompt}"
@@ -148,6 +150,12 @@ Enhanced prompt:`;
                     cleaned = cleaned.replace(/(\b(?:input|text|content|data)\b)/gi, '$1: {user_input}');
                 }
             }
+        }
+        // CRITICAL: Ensure {user_input} placeholder is always present
+        // If no user input placeholder exists, add it at the end
+        if (!cleaned.includes('{user_input}') && !cleaned.includes('{input}') && !cleaned.includes('{text}') && !cleaned.includes('{content}')) {
+            // Add {user_input} at the end of the prompt
+            cleaned = cleaned + ' {user_input}';
         }
         return cleaned;
     }

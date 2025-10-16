@@ -61,6 +61,46 @@ function copyStaticAssets() {
             console.warn(`  ⚠  ${file} not found`);
         }
     });
+
+    // Copy icons directory
+    const iconsDir = 'icons';
+    const distIconsDir = path.join(DIST_DIR, iconsDir);
+
+    if (fs.existsSync(iconsDir)) {
+        if (!fs.existsSync(distIconsDir)) {
+            fs.mkdirSync(distIconsDir, { recursive: true });
+        }
+
+        const iconFiles = fs.readdirSync(iconsDir);
+        iconFiles.forEach(file => {
+            const srcPath = path.join(iconsDir, file);
+            const destPath = path.join(distIconsDir, file);
+            fs.copyFileSync(srcPath, destPath);
+            console.log(`  ✓ Copied ${iconsDir}/${file}`);
+        });
+    } else {
+        console.warn(`  ⚠  ${iconsDir} directory not found`);
+    }
+
+    // Copy images directory
+    const imagesDir = 'images';
+    const distImagesDir = path.join(DIST_DIR, imagesDir);
+
+    if (fs.existsSync(imagesDir)) {
+        if (!fs.existsSync(distImagesDir)) {
+            fs.mkdirSync(distImagesDir, { recursive: true });
+        }
+
+        const imageFiles = fs.readdirSync(imagesDir);
+        imageFiles.forEach(file => {
+            const srcPath = path.join(imagesDir, file);
+            const destPath = path.join(distImagesDir, file);
+            fs.copyFileSync(srcPath, destPath);
+            console.log(`  ✓ Copied ${imagesDir}/${file}`);
+        });
+    } else {
+        console.warn(`  ⚠  ${imagesDir} directory not found`);
+    }
 }
 
 /**

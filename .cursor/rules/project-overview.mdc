@@ -686,7 +686,6 @@ The following phases break down the technical development work into logical stag
 
 **Technical Tasks:**
 - Implement comprehensive error boundaries
-  - Catch and display storage errors
   - Handle AI API quota exceeded
   - Recover from corrupted storage data
 - Add retry logic for transient failures
@@ -702,9 +701,6 @@ The following phases break down the technical development work into logical stag
   - Validate imported JSON schema
   - Sanitize user inputs before storage
   - Validate API responses
-- Add logging system for debugging
-  - Console logging for development
-  - Error reporting structure (no external services)
 - Create fallback UI for catastrophic failures
   - "Something went wrong" screen
   - Clear cache/reset button

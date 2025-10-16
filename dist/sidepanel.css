@@ -27,12 +27,21 @@ body {
     padding: 16px;
     border-bottom: 1px solid #3A3A3A;
     background: #1E1E1E;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .header h1 {
     font-size: 18px;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin: 0;
     color: #FFFFFF;
 }
 
@@ -165,7 +174,7 @@ body {
 }
 
 .search-input:focus {
-    outline: 2px solid #4285F4;
+    outline: 1px solid #4285F4;
     background: #3A3A3A;
 }
 

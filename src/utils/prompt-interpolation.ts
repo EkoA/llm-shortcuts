@@ -110,6 +110,13 @@ export function interpolatePrompt(
             console.warn('Unreplaced placeholders found:', remainingPlaceholders);
         }
 
+        // CRITICAL: If no placeholders were found and replaced, append the user input
+        // This ensures user input is always included even if the template has no placeholders
+        if (interpolated === template) {
+            // No placeholders were replaced, so append the user input
+            interpolated = template + ' ' + sanitizedInput;
+        }
+
         return interpolated;
     } catch (error) {
         if (error instanceof PromptInterpolationError) {
