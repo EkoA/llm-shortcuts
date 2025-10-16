@@ -88,6 +88,18 @@ export declare class StorageService {
      */
     importData(jsonData: string): Promise<void>;
     /**
+     * Get user guide from storage
+     */
+    getGuide(): Promise<string>;
+    /**
+     * Save user guide to storage
+     */
+    saveGuide(guideContent: string): Promise<void>;
+    /**
+     * Clear user guide from storage
+     */
+    clearGuide(): Promise<void>;
+    /**
      * Get default storage schema
      */
     private getDefaultSchema;

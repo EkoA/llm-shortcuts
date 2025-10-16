@@ -16,11 +16,14 @@ declare const PromptExecutor: any;
 declare const getPromptExecutor: () => any;
 
 // Prompt interpolation utilities will be loaded via script tag
-declare const interpolatePrompt: (template: string, userInput: string, options?: any) => string;
+declare const interpolatePrompt: (template: string, userInput: string, options?: any, guide?: string) => string;
 
 // Prompt Enhancer will be loaded via script tag
 declare const PromptEnhancer: any;
 declare const getPromptEnhancer: () => any;
+
+// Storage Service will be loaded via script tag
+declare const getStorageService: () => any;
 
 // Type definitions for Recipe
 interface Recipe {
@@ -74,6 +77,7 @@ let aiClient: any = null;
 let recipeManager: any = null;
 let promptExecutor: any = null;
 let promptEnhancer: any = null;
+let storageService: any = null;
 let currentRecipes: Recipe[] = [];
 let currentRecipe: Recipe | null = null;
 let isExecuting = false;
@@ -81,6 +85,7 @@ let editingRecipeId: string | null = null;
 let formValidationState: { [key: string]: boolean } = {};
 let isEnhancing = false;
 let currentEnhancement: any = null;
+let userGuide: string = '';
 
 // Response history state
 let responseHistory: Map<string, ResponseHistoryItem[]> = new Map();
@@ -105,6 +110,9 @@ async function initialize() {
     // Initialize prompt enhancer
     promptEnhancer = getPromptEnhancer();
 
+    // Initialize storage service
+    storageService = getStorageService();
+
     // Debug: Check if AI client functions are loaded
     console.log('AI Client loaded. Functions available:');
     console.log('isAIAvailable:', typeof isAIAvailable);
@@ -119,6 +127,9 @@ async function initialize() {
 
     // Load initial state
     await loadInitialState();
+
+    // Load user guide
+    await loadGuide();
 }
 
 /**
@@ -225,6 +236,19 @@ function setupEventListeners() {
     closeEnhancementBtn?.addEventListener('click', hideEnhancementUI);
     acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
     rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
+
+    // Guide management
+    const toggleGuideBtn = document.getElementById('toggle-guide-btn') as HTMLButtonElement;
+    const closeGuideModalBtn = document.getElementById('close-guide-modal') as HTMLButtonElement;
+    const saveGuideBtn = document.getElementById('save-guide-btn') as HTMLButtonElement;
+    const clearGuideBtn = document.getElementById('clear-guide-btn') as HTMLButtonElement;
+    const guideContentInput = document.getElementById('guide-content') as HTMLTextAreaElement;
+
+    toggleGuideBtn?.addEventListener('click', showGuideModal);
+    closeGuideModalBtn?.addEventListener('click', hideGuideModal);
+    saveGuideBtn?.addEventListener('click', handleSaveGuide);
+    clearGuideBtn?.addEventListener('click', handleClearGuide);
+    guideContentInput?.addEventListener('input', updateGuideCharCount);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
@@ -469,12 +493,12 @@ async function executeWithStreaming(recipe: Recipe, userInput: string, imageFile
     try {
         console.log('Executing recipe with streaming:', recipe.name);
 
-        // Use proper prompt interpolation with sanitization
+        // Use proper prompt interpolation with sanitization and guide
         const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
             maxLength: 10000,
             allowHtml: false,
             escapeSpecialChars: true
-        });
+        }, userGuide);
 
         // Log image file if provided (for future implementation)
         if (imageFile) {
@@ -539,12 +563,12 @@ async function executeWithContentScript(recipe: Recipe, userInput: string, image
     try {
         console.log('Executing recipe via direct AI access:', recipe.name);
 
-        // Use proper prompt interpolation with sanitization
+        // Use proper prompt interpolation with sanitization and guide
         const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
             maxLength: 10000,
             allowHtml: false,
             escapeSpecialChars: true
-        });
+        }, userGuide);
 
         // Log image file if provided (for future implementation)
         if (imageFile) {
@@ -765,6 +789,7 @@ function renderRecipeList() {
     if (currentRecipes.length === 0) {
         recipeListEl.innerHTML = `
             <div class="empty-state">
+            <img src="images/new-recipe.svg" alt="No recipes found" />
                 <h3>No recipes yet</h3>
                 <p>Create your first recipe to get started!</p>
                 <button id="create-recipe-btn" class="btn btn-primary">Create Recipe</button>
@@ -963,6 +988,7 @@ function renderFilteredRecipeList(recipes: Recipe[]) {
     if (recipes.length === 0) {
         recipeListContent.innerHTML = `
             <div class="empty-state">
+            <img src="images/empty-search.svg" alt="No recipes found" />
                 <h3>No recipes found</h3>
                 <p>Try adjusting your search terms.</p>
             </div>
@@ -1777,6 +1803,13 @@ function handleEscapeKey() {
         return;
     }
 
+    // If guide modal is open, close it
+    const guideModal = document.getElementById('guide-modal') as HTMLElement;
+    if (guideModal && guideModal.style.display !== 'none') {
+        hideGuideModal();
+        return;
+    }
+
     // If in execution view, go back to list
     if (recipeExecutionEl.style.display !== 'none') {
         showRecipeList();
@@ -1871,6 +1904,168 @@ function createShortcutsHelp() {
             hideShortcutsHelp();
         }
     });
+}
+
+/**
+ * Load user guide from storage
+ */
+async function loadGuide() {
+    try {
+        if (!storageService) {
+            console.warn('Storage service not available');
+            return;
+        }
+        userGuide = await storageService.getGuide();
+        console.log('User guide loaded:', userGuide ? 'Set' : 'Not set');
+        updateGuideButtonState();
+    } catch (error) {
+        console.error('Failed to load guide:', error);
+        userGuide = '';
+    }
+}
+
+/**
+ * Show guide modal
+ */
+function showGuideModal() {
+    const guideModal = document.getElementById('guide-modal') as HTMLElement;
+    const guideContentInput = document.getElementById('guide-content') as HTMLTextAreaElement;
+
+    if (!guideModal || !guideContentInput) return;
+
+    // Populate with current guide content
+    guideContentInput.value = userGuide;
+    updateGuideCharCount();
+
+    // Show modal
+    guideModal.style.display = 'flex';
+
+    // Focus on the textarea
+    setTimeout(() => {
+        guideContentInput.focus();
+    }, 100);
+
+    // Add click outside to close
+    const handleClickOutside = (event: MouseEvent) => {
+        if (event.target === guideModal) {
+            hideGuideModal();
+            guideModal.removeEventListener('click', handleClickOutside);
+        }
+    };
+    guideModal.addEventListener('click', handleClickOutside);
+}
+
+/**
+ * Hide guide modal
+ */
+function hideGuideModal() {
+    const guideModal = document.getElementById('guide-modal') as HTMLElement;
+    if (guideModal) {
+        guideModal.style.display = 'none';
+    }
+}
+
+/**
+ * Handle save guide
+ */
+async function handleSaveGuide() {
+    const guideContentInput = document.getElementById('guide-content') as HTMLTextAreaElement;
+    if (!guideContentInput || !storageService) return;
+
+    const guideContent = guideContentInput.value.trim();
+
+    try {
+        await storageService.saveGuide(guideContent);
+        userGuide = guideContent;
+        updateGuideButtonState();
+        hideGuideModal();
+
+        // Show success feedback
+        const saveBtn = document.getElementById('save-guide-btn') as HTMLButtonElement;
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = '✓ Saved!';
+        saveBtn.style.backgroundColor = '#4CAF50';
+
+        setTimeout(() => {
+            saveBtn.textContent = originalText;
+            saveBtn.style.backgroundColor = '';
+        }, 2000);
+
+        console.log('Guide saved successfully');
+    } catch (error) {
+        console.error('Failed to save guide:', error);
+        alert('Failed to save guide. Please try again.');
+    }
+}
+
+/**
+ * Handle clear guide
+ */
+async function handleClearGuide() {
+    if (!confirm('Are you sure you want to clear your guide? This will remove the persistent context from all recipe executions.')) {
+        return;
+    }
+
+    try {
+        if (!storageService) return;
+
+        await storageService.clearGuide();
+        userGuide = '';
+        updateGuideButtonState();
+
+        // Clear the textarea
+        const guideContentInput = document.getElementById('guide-content') as HTMLTextAreaElement;
+        if (guideContentInput) {
+            guideContentInput.value = '';
+            updateGuideCharCount();
+        }
+
+        console.log('Guide cleared successfully');
+    } catch (error) {
+        console.error('Failed to clear guide:', error);
+        alert('Failed to clear guide. Please try again.');
+    }
+}
+
+/**
+ * Update guide character count display
+ */
+function updateGuideCharCount() {
+    const guideContentInput = document.getElementById('guide-content') as HTMLTextAreaElement;
+    const charCountEl = document.getElementById('guide-char-current') as HTMLElement;
+
+    if (!guideContentInput || !charCountEl) return;
+
+    const currentLength = guideContentInput.value.length;
+    charCountEl.textContent = currentLength.toString();
+
+    // Change color based on length
+    const charCountContainer = charCountEl.parentElement;
+    if (charCountContainer) {
+        if (currentLength > 1000) {
+            charCountContainer.style.color = '#f44336'; // Red
+        } else if (currentLength > 800) {
+            charCountContainer.style.color = '#ff9800'; // Orange
+        } else {
+            charCountContainer.style.color = '';
+        }
+    }
+}
+
+/**
+ * Update guide button state to show if guide is set
+ */
+function updateGuideButtonState() {
+    const toggleGuideBtn = document.getElementById('toggle-guide-btn') as HTMLButtonElement;
+    if (!toggleGuideBtn) return;
+
+    if (userGuide && userGuide.trim().length > 0) {
+        toggleGuideBtn.classList.add('active');
+        toggleGuideBtn.title = 'Guide Active - Click to edit';
+    } else {
+        toggleGuideBtn.classList.remove('active');
+        toggleGuideBtn.title = 'Set Guide';
+    }
 }
 
 // Make functions globally available for onclick handlers

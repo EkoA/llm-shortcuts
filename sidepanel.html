@@ -12,11 +12,58 @@
     <div id="app">
         <header class="header">
             <div class="header-content">
-                <img src="images/LLM-shortcuts-logo-white.png" alt="LLM Shortcuts" class="logo" width="20" height="20">
-                <h1>LLM Shortcuts</h1>
+                <div class="header-left">
+                    <img src="images/LLM-shortcuts-logo-white.png" alt="LLM Shortcuts" class="logo" width="20"
+                        height="20">
+                    <h1>LLM Shortcuts</h1>
+                </div>
+                <button id="toggle-guide-btn" class="btn-icon guide-toggle-btn" title="Set Guide">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                </button>
             </div>
             <p class="subtitle">Reusable AI prompt templates</p>
         </header>
+
+        <!-- Guide Management Modal (hidden by default) -->
+        <div id="guide-modal" class="guide-modal" style="display: none;">
+            <div class="guide-modal-content">
+                <div class="guide-modal-header">
+                    <h3>Set Your Guide</h3>
+                    <button type="button" id="close-guide-modal" class="btn-icon">✕</button>
+                </div>
+                <div class="guide-modal-body">
+                    <p class="guide-description">
+                        Your Guide provides persistent context that will be automatically included with all recipe
+                        executions.
+                        Use it to set preferences, background information, or instructions that should apply to every
+                        prompt.
+                    </p>
+                    <div class="form-group">
+                        <label for="guide-content">Guide Content (optional)</label>
+                        <textarea id="guide-content" rows="6" maxlength="1000"
+                            placeholder="Example: You are a helpful assistant that always responds in a professional tone. Focus on clarity and conciseness.
+
+Example: I'm a software developer working with TypeScript and React. When explaining code, use technical terms and provide practical examples.
+
+Example: I prefer responses that are concise and to the point. Skip pleasantries and get straight to the answer."></textarea>
+                        <small class="guide-char-count">
+                            <span id="guide-char-current">0</span> / 1000 characters
+                            <span class="guide-hint">(Recommended: 200-500 characters)</span>
+                        </small>
+                    </div>
+                </div>
+                <div class="guide-modal-actions">
+                    <button type="button" id="clear-guide-btn" class="btn btn-secondary">Clear Guide</button>
+                    <button type="button" id="save-guide-btn" class="btn btn-primary">Save Guide</button>
+                </div>
+            </div>
+        </div>
 
         <main class="main">
             <!-- AI Availability Check -->
@@ -123,9 +170,9 @@
                             required.</small>
                     </div>
 
-                    <button id="execute-recipe" class="btn btn-primary"> <svg width="14" height="14" viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round">
+                    <button id="execute-recipe" class="btn btn-primary btn-sm"> <svg width="14" height="14"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5,3 19,12 5,21"></polygon>
                         </svg> &nbsp; Execute Recipe</button>
                 </div>

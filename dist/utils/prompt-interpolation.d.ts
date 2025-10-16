@@ -23,9 +23,9 @@ export interface SanitizationOptions {
  */
 export declare function sanitizeInput(input: string, options?: SanitizationOptions): string;
 /**
- * Interpolate user input into a prompt template
+ * Interpolate user input into a prompt template with optional guide prepending
  */
-export declare function interpolatePrompt(template: string, userInput: string, options?: SanitizationOptions): string;
+export declare function interpolatePrompt(template: string, userInput: string, options?: SanitizationOptions, guide?: string): string;
 /**
  * Interpolate multiple inputs into a prompt template
  */

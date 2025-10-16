@@ -191,6 +191,32 @@ export class StorageService {
         }
     }
     /**
+     * Get user guide from storage
+     */
+    async getGuide() {
+        const data = await this.getAllData();
+        return data.guide?.content || '';
+    }
+    /**
+     * Save user guide to storage
+     */
+    async saveGuide(guideContent) {
+        const data = await this.getAllData();
+        data.guide = {
+            content: guideContent,
+            updatedAt: Date.now()
+        };
+        await this.saveAllData(data);
+    }
+    /**
+     * Clear user guide from storage
+     */
+    async clearGuide() {
+        const data = await this.getAllData();
+        delete data.guide;
+        await this.saveAllData(data);
+    }
+    /**
      * Get default storage schema
      */
     getDefaultSchema() {

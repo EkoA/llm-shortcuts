@@ -114,11 +114,23 @@ export interface StorageVersion {
 }
 
 /**
+ * User Guide for persistent context across all recipe executions
+ */
+export interface UserGuide {
+    /** Guide content - persistent context for all recipes */
+    content: string;
+    /** When the guide was last updated */
+    updatedAt: number;
+}
+
+/**
  * Complete storage schema
  */
 export interface StorageSchema {
     version: StorageVersion;
     recipes: Recipe[];
+    /** Optional user guide for persistent context */
+    guide?: UserGuide;
 }
 
 /**

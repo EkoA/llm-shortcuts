@@ -49,9 +49,9 @@ export function sanitizeInput(input, options = {}) {
     return sanitized;
 }
 /**
- * Interpolate user input into a prompt template
+ * Interpolate user input into a prompt template with optional guide prepending
  */
-export function interpolatePrompt(template, userInput, options = {}) {
+export function interpolatePrompt(template, userInput, options = {}, guide) {
     try {
         if (!template || typeof template !== 'string') {
             throw new PromptInterpolationError('Invalid prompt template', 'INVALID_TEMPLATE');
@@ -78,6 +78,10 @@ export function interpolatePrompt(template, userInput, options = {}) {
         if (interpolated === template) {
             // No placeholders were replaced, so append the user input
             interpolated = template + ' ' + sanitizedInput;
+        }
+        // Prepend guide if provided
+        if (guide && guide.trim().length > 0) {
+            interpolated = guide.trim() + '\n\n' + interpolated;
         }
         return interpolated;
     }

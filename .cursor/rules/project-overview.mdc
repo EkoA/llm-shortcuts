@@ -686,6 +686,7 @@ The following phases break down the technical development work into logical stag
 
 **Technical Tasks:**
 - Implement comprehensive error boundaries
+  - Add a messgae when the model is being downloaded for the first time for first time users
   - Handle AI API quota exceeded
   - Recover from corrupted storage data
 - Add retry logic for transient failures
