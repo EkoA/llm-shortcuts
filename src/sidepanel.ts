@@ -61,6 +61,7 @@ const cancelRecipeBtn = document.getElementById('cancel-recipe') as HTMLButtonEl
 const backToListBtn = document.getElementById('back-to-list') as HTMLButtonElement;
 const executeRecipeBtn = document.getElementById('execute-recipe') as HTMLButtonElement;
 const copyResultBtn = document.getElementById('copy-result') as HTMLButtonElement;
+const rerunResultBtn = document.getElementById('rerun-result') as HTMLButtonElement;
 const clearResultBtn = document.getElementById('clear-result') as HTMLButtonElement;
 
 // Form elements
@@ -207,8 +208,9 @@ function setupEventListeners() {
     recipeForm?.addEventListener('submit', handleRecipeSubmit);
 
     // Recipe execution
-    executeRecipeBtn?.addEventListener('click', handleRecipeExecution);
+    executeRecipeBtn?.addEventListener('click', () => handleRecipeExecution());
     copyResultBtn?.addEventListener('click', copyResult);
+    rerunResultBtn?.addEventListener('click', handleRerunResult);
     clearResultBtn?.addEventListener('click', clearResult);
 
 
@@ -390,7 +392,7 @@ async function handleRecipeSubmit(event: Event) {
 /**
  * Handle recipe execution
  */
-async function handleRecipeExecution() {
+async function handleRecipeExecution(bypassCache = false) {
     if (!promptExecutor) {
         alert('Prompt executor not available');
         return;
@@ -415,8 +417,8 @@ async function handleRecipeExecution() {
         return;
     }
 
-    // Check for cached response first
-    if (userInput && !imageFile) {
+    // Check for cached response first (unless bypassing cache)
+    if (!bypassCache && userInput && !imageFile) {
         const cacheKey = `${currentRecipe.id}_${userInput}`;
         const cachedResponse = responseCache.get(cacheKey);
         if (cachedResponse) {
@@ -791,7 +793,7 @@ function showExecutionError(errorMessage: string) {
  */
 function retryExecution() {
     if (currentRecipe && !isExecuting) {
-        handleRecipeExecution();
+        handleRecipeExecution(true);
     }
 }
 
@@ -901,6 +903,18 @@ function clearResult() {
     resultContentEl.textContent = '';
     document.getElementById('execution-result')!.style.display = 'none';
     document.getElementById('execution-stats')!.style.display = 'none';
+}
+
+/**
+ * Handle rerun result button click
+ */
+function handleRerunResult() {
+    if (isExecuting) {
+        return; // Don't allow rerun if already executing
+    }
+
+    // Force fresh execution by calling the execution handler with bypass cache flag
+    handleRecipeExecution(true);
 }
 
 

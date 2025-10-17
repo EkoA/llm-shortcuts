@@ -14,6 +14,7 @@ const cancelRecipeBtn = document.getElementById('cancel-recipe');
 const backToListBtn = document.getElementById('back-to-list');
 const executeRecipeBtn = document.getElementById('execute-recipe');
 const copyResultBtn = document.getElementById('copy-result');
+const rerunResultBtn = document.getElementById('rerun-result');
 const clearResultBtn = document.getElementById('clear-result');
 // Form elements
 const recipeForm = document.getElementById('recipe-form-element');
@@ -129,8 +130,9 @@ function setupEventListeners() {
     // Form submission
     recipeForm?.addEventListener('submit', handleRecipeSubmit);
     // Recipe execution
-    executeRecipeBtn?.addEventListener('click', handleRecipeExecution);
+    executeRecipeBtn?.addEventListener('click', () => handleRecipeExecution());
     copyResultBtn?.addEventListener('click', copyResult);
+    rerunResultBtn?.addEventListener('click', handleRerunResult);
     clearResultBtn?.addEventListener('click', clearResult);
     // Search functionality
     searchInput?.addEventListener('input', debounce(handleSearch, 300));
@@ -280,7 +282,7 @@ async function handleRecipeSubmit(event) {
 /**
  * Handle recipe execution
  */
-async function handleRecipeExecution() {
+async function handleRecipeExecution(bypassCache = false) {
     if (!promptExecutor) {
         alert('Prompt executor not available');
         return;
@@ -300,8 +302,8 @@ async function handleRecipeExecution() {
         alert('Recipe is already executing');
         return;
     }
-    // Check for cached response first
-    if (userInput && !imageFile) {
+    // Check for cached response first (unless bypassing cache)
+    if (!bypassCache && userInput && !imageFile) {
         const cacheKey = `${currentRecipe.id}_${userInput}`;
         const cachedResponse = responseCache.get(cacheKey);
         if (cachedResponse) {
@@ -630,7 +632,7 @@ function showExecutionError(errorMessage) {
  */
 function retryExecution() {
     if (currentRecipe && !isExecuting) {
-        handleRecipeExecution();
+        handleRecipeExecution(true);
     }
 }
 /**
@@ -725,6 +727,16 @@ function clearResult() {
     resultContentEl.textContent = '';
     document.getElementById('execution-result').style.display = 'none';
     document.getElementById('execution-stats').style.display = 'none';
+}
+/**
+ * Handle rerun result button click
+ */
+function handleRerunResult() {
+    if (isExecuting) {
+        return; // Don't allow rerun if already executing
+    }
+    // Force fresh execution by calling the execution handler with bypass cache flag
+    handleRecipeExecution(true);
 }
 /**
  * Load recipes from storage
