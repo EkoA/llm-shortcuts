@@ -450,6 +450,118 @@ button[type="submit"]:disabled {
     background-color: #3A3A3A;
 }
 
+/* Form hints */
+.form-hint {
+    color: #808080;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Checkbox styling */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #FFFFFF;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    position: relative;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: #2C2C2C;
+    border: 1px solid #4A4A4A;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.checkbox-label input[type="checkbox"]:checked+.checkmark {
+    background: #007AFF;
+    border-color: #007AFF;
+}
+
+.checkbox-label input[type="checkbox"]:checked+.checkmark::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* Recipe list enhancements */
+.recipe-item.pinned {
+    border-left: 3px solid #007AFF;
+    background: rgba(0, 122, 255, 0.05);
+}
+
+.recipe-title-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pin-indicator {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.recipe-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0;
+}
+
+.tag {
+    background: #2C2C2C;
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 11px;
+    border: 1px solid #4A4A4A;
+}
+
+/* Filter container */
+.filter-container {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.filter-select {
+    padding: 6px 8px;
+    border: 1px solid #4A4A4A;
+    border-radius: 4px;
+    background: #2C2C2C;
+    color: #FFFFFF;
+    font-size: 12px;
+    min-width: 120px;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
 button[type="submit"]:disabled:hover {
     background-color: #3A3A3A;
     transform: none;

@@ -140,6 +140,21 @@ Example: I prefer responses that are concise and to the point. Skip pleasantries
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label for="recipe-tags">Tags (optional)</label>
+                        <input type="text" id="recipe-tags" name="tags"
+                            placeholder="Enter tags separated by commas (e.g., email, work, important)">
+                        <small class="form-hint">Tags help organize your recipes. Separate multiple tags with
+                            commas.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="recipe-pinned" name="pinned">
+                            <span class="checkmark"></span>
+                            Pin this recipe (show at top of list)
+                        </label>
+                    </div>
 
                     <div class="form-actions">
                         <button type="button" id="cancel-recipe" class="btn btn-secondary">Cancel</button>

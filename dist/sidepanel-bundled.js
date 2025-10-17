@@ -2302,11 +2302,18 @@ async function handleRecipeSubmit(event) {
         return;
     }
     const formData = new FormData(recipeForm);
+    // Parse tags from comma-separated string
+    const tagsString = formData.get('tags');
+    const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
+    // Get pinned status
+    const pinned = formData.get('pinned') === 'on';
     const recipeData = {
         name: formData.get('name'),
         description: formData.get('description'),
         prompt: formData.get('prompt'),
-        originalPrompt: formData.get('prompt') // Same as prompt for now
+        originalPrompt: formData.get('prompt'), // Same as prompt for now
+        tags: tags,
+        pinned: pinned
     };
     try {
         if (editingRecipeId) {
@@ -2815,6 +2822,13 @@ async function loadRecipes() {
     }
 }
 /**
+ * Get unique tags from all recipes
+ */
+function getUniqueTags() {
+    const allTags = currentRecipes.flatMap(recipe => recipe.tags || []);
+    return [...new Set(allTags)].sort();
+}
+/**
  * Render the recipe list
  */
 function renderRecipeList() {
@@ -2834,11 +2848,27 @@ function renderRecipeList() {
         newCreateBtn?.addEventListener('click', showRecipeForm);
         return;
     }
-    const recipesHtml = currentRecipes.map(recipe => `
-        <div class="recipe-item" data-recipe-id="${recipe.id}">
+    // Sort recipes: pinned first, then by name
+    const sortedRecipes = [...currentRecipes].sort((a, b) => {
+        if (a.pinned && !b.pinned)
+            return -1;
+        if (!a.pinned && b.pinned)
+            return 1;
+        return a.name.localeCompare(b.name);
+    });
+    const recipesHtml = sortedRecipes.map(recipe => `
+        <div class="recipe-item ${recipe.pinned ? 'pinned' : ''}" data-recipe-id="${recipe.id}">
             <div class="recipe-header">
-                <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
+                <div class="recipe-title-section">
+                    ${recipe.pinned ? '<span class="pin-indicator" title="Pinned Recipe">📌</span>' : ''}
+                    <h3 class="recipe-name">${escapeHtml(recipe.name)}</h3>
+                </div>
                 <div class="recipe-actions">
+                    <button class="btn-icon" data-action="toggle-pin" title="${recipe.pinned ? 'Unpin Recipe' : 'Pin Recipe'}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                        </svg>
+                    </button>
                     <button class="btn-icon" data-action="execute" title="Execute Recipe">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5,3 19,12 5,21"></polygon>
@@ -2861,6 +2891,11 @@ function renderRecipeList() {
                 </div>
             </div>
             <p class="recipe-description">${escapeHtml(recipe.description || 'No description')}</p>
+            ${recipe.tags && recipe.tags.length > 0 ? `
+                <div class="recipe-tags">
+                    ${recipe.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            ` : ''}
             <div class="recipe-meta">
                 ${recipe.lastUsedAt ? `<span class="recipe-last-used">Last used: ${formatDate(recipe.lastUsedAt)}</span>` : ''}
                 <span class="recipe-created">Created: ${formatDate(recipe.createdAt)}</span>
@@ -2875,6 +2910,12 @@ function renderRecipeList() {
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
                     <input type="text" id="search-recipes" placeholder="Search recipes..." class="search-input">
+                </div>
+                <div class="filter-container">
+                    <select id="tag-filter" class="filter-select">
+                        <option value="">All Tags</option>
+                        ${getUniqueTags().map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('')}
+                    </select>
                 </div>
             </div>
             <br>    
@@ -2903,6 +2944,8 @@ New Recipe</button>
     const newSearchInput = document.getElementById('search-recipes');
     const newSortSelect = document.getElementById('sort-recipes');
     const newCreateBtn = document.getElementById('create-recipe-btn');
+    const tagFilter = document.getElementById('tag-filter');
+    const pinnedOnlyFilter = document.getElementById('pinned-only-filter');
     if (newSearchInput) {
         searchInput = newSearchInput;
         newSearchInput.addEventListener('input', debounce(handleSearch, 300));
@@ -2910,6 +2953,12 @@ New Recipe</button>
     if (newSortSelect) {
         sortSelect = newSortSelect;
         newSortSelect.addEventListener('change', handleSortChange);
+    }
+    if (tagFilter) {
+        tagFilter.addEventListener('change', applyFilters);
+    }
+    if (pinnedOnlyFilter) {
+        pinnedOnlyFilter.addEventListener('change', applyFilters);
     }
     if (newCreateBtn) {
         newCreateBtn.addEventListener('click', showRecipeForm);
@@ -2926,7 +2975,9 @@ function handleRecipeListClick(event) {
     const recipeId = recipeItem.dataset['recipeId'];
     if (!recipeId)
         return;
-    const action = target.dataset['action'];
+    // Find the button element that was clicked (in case user clicked on SVG inside button)
+    const button = target.closest('button[data-action]');
+    const action = button?.dataset['action'];
     switch (action) {
         case 'execute':
             executeRecipe(recipeId);
@@ -2936,6 +2987,9 @@ function handleRecipeListClick(event) {
             break;
         case 'delete':
             deleteRecipe(recipeId);
+            break;
+        case 'toggle-pin':
+            toggleRecipePin(recipeId);
             break;
         default:
             // Click on recipe item itself - execute it
@@ -2947,18 +3001,33 @@ function handleRecipeListClick(event) {
  * Handle search input
  */
 function handleSearch() {
+    applyFilters();
+}
+/**
+ * Apply all active filters
+ */
+function applyFilters() {
     if (!searchInput)
         return;
     const searchTerm = searchInput.value.toLowerCase().trim();
-    if (!searchTerm) {
-        // Show all recipes if no search term
-        renderRecipeList();
-        return;
+    const tagFilter = document.getElementById('tag-filter')?.value || '';
+    const pinnedOnly = document.getElementById('pinned-only-filter')?.checked || false;
+    let filteredRecipes = [...currentRecipes];
+    // Apply search term filter
+    if (searchTerm) {
+        filteredRecipes = filteredRecipes.filter(recipe => recipe.name.toLowerCase().includes(searchTerm) ||
+            recipe.description.toLowerCase().includes(searchTerm) ||
+            recipe.prompt.toLowerCase().includes(searchTerm) ||
+            (recipe.tags && recipe.tags.some(tag => tag.toLowerCase().includes(searchTerm))));
     }
-    // Filter recipes based on search term
-    const filteredRecipes = currentRecipes.filter(recipe => recipe.name.toLowerCase().includes(searchTerm) ||
-        recipe.description.toLowerCase().includes(searchTerm) ||
-        recipe.prompt.toLowerCase().includes(searchTerm));
+    // Apply tag filter
+    if (tagFilter) {
+        filteredRecipes = filteredRecipes.filter(recipe => recipe.tags && recipe.tags.includes(tagFilter));
+    }
+    // Apply pinned filter
+    if (pinnedOnly) {
+        filteredRecipes = filteredRecipes.filter(recipe => recipe.pinned);
+    }
     renderFilteredRecipeList(filteredRecipes);
 }
 /**
@@ -3100,6 +3169,22 @@ async function editRecipe(recipeId) {
     }
 }
 /**
+ * Toggle recipe pin status
+ */
+async function toggleRecipePin(recipeId) {
+    try {
+        const updatedRecipe = await recipeManager.toggleRecipePin(recipeId);
+        console.log('Recipe pin toggled:', updatedRecipe.id, 'pinned:', updatedRecipe.pinned);
+        // Reload recipes to reflect the change
+        await loadRecipes();
+        renderRecipeList();
+    }
+    catch (error) {
+        console.error('Failed to toggle recipe pin:', error);
+        alert('Failed to toggle recipe pin');
+    }
+}
+/**
  * Delete a recipe
  */
 async function deleteRecipe(recipeId) {
@@ -3192,12 +3277,18 @@ function populateFormWithRecipe(recipe) {
     const nameInput = document.getElementById('recipe-name');
     const descriptionInput = document.getElementById('recipe-description');
     const promptInput = document.getElementById('recipe-prompt');
+    const tagsInput = document.getElementById('recipe-tags');
+    const pinnedInput = document.getElementById('recipe-pinned');
     if (nameInput)
         nameInput.value = recipe.name;
     if (descriptionInput)
         descriptionInput.value = recipe.description;
     if (promptInput)
         promptInput.value = recipe.prompt;
+    if (tagsInput)
+        tagsInput.value = recipe.tags ? recipe.tags.join(', ') : '';
+    if (pinnedInput)
+        pinnedInput.checked = recipe.pinned || false;
 }
 /**
  * Set up real-time form validation

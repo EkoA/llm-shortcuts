@@ -639,22 +639,10 @@ The following phases break down the technical development work into logical stag
 
 ---
 
-### Phase 8: Data Management Features (Import/Export & Organization)
-**Goal**: Enable recipe portability and organization
+### Phase 8: Tags and pin functionality
+**Goal**: Enable better management of tags
 
 **Technical Tasks:**
-- Implement recipe export functionality
-  - Serialize single recipe to JSON
-  - Export all recipes to JSON file
-  - Add download trigger in UI
-- Implement recipe import functionality
-  - File upload handling
-  - JSON parsing and validation
-  - Merge strategy (overwrite vs. create new)
-  - Handle import errors (invalid JSON, schema mismatch)
-- Add recipe duplication feature
-  - Clone recipe with new ID
-  - Append "(Copy)" to name
 - Implement recipe categories/tags (optional)
   - Add `tags` field to Recipe model
   - Tag input UI (autocomplete or manual entry)
@@ -665,8 +653,6 @@ The following phases break down the technical development work into logical stag
   - Toggle pin state in UI
 
 **Deliverables:**
-- Import/export functionality with JSON format
-- Recipe duplication
 - Tags/categories (optional)
 - Favorite/pin feature
 
