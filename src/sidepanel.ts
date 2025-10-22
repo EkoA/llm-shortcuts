@@ -512,7 +512,7 @@ async function executeWithStreaming(recipe: Recipe, userInput: string, imageFile
             escapeSpecialChars: true
         }, userGuide);
 
-        // Log image file if provided (for future implementation)
+        // Log image file if provided
         if (imageFile) {
             console.log('Image file provided:', imageFile.name, imageFile.size, 'bytes');
         }
@@ -528,22 +528,52 @@ async function executeWithStreaming(recipe: Recipe, userInput: string, imageFile
         // Create AI session
         const session = await aiWindow.LanguageModel.create({
             temperature: 0.7,
-            topK: 40
+            topK: 40,
+            outputLanguage: 'en'
         });
 
         try {
             // Show typing indicator
             showTypingIndicator();
 
-            // Execute streaming prompt
-            const stream = session.promptStreaming(interpolatedPrompt);
             let fullResponse = '';
 
-            // Process streaming response
-            for await (const chunk of stream) {
-                fullResponse += chunk;
-                // Update UI with new chunk
-                updateStreamingResponse(fullResponse);
+            // Handle multimodal input if image is provided
+            if (imageFile) {
+                console.log('Using multimodal execution with image');
+
+                // Append multimodal content to session
+                const messages = [
+                    { type: 'text', value: interpolatedPrompt }
+                ];
+
+                if (imageFile) {
+                    messages.push({ type: 'image', value: imageFile as any });
+                }
+
+                await session.append(messages);
+
+                // Execute streaming prompt
+                const stream = session.promptStreaming('');
+
+                // Process streaming response
+                for await (const chunk of stream) {
+                    fullResponse += chunk;
+                    // Update UI with new chunk
+                    updateStreamingResponse(fullResponse);
+                }
+            } else {
+                console.log('Using text-only execution');
+
+                // Execute streaming prompt (text only)
+                const stream = session.promptStreaming(interpolatedPrompt);
+
+                // Process streaming response
+                for await (const chunk of stream) {
+                    fullResponse += chunk;
+                    // Update UI with new chunk
+                    updateStreamingResponse(fullResponse);
+                }
             }
 
             // Hide typing indicator
@@ -598,12 +628,37 @@ async function executeWithContentScript(recipe: Recipe, userInput: string, image
         // Create AI session
         const session = await aiWindow.LanguageModel.create({
             temperature: 0.7,
-            topK: 40
+            topK: 40,
+            outputLanguage: 'en'
         });
 
         try {
-            // Execute prompt
-            const response = await session.prompt(interpolatedPrompt);
+            let response: string;
+
+            // Handle multimodal input if image is provided
+            if (imageFile) {
+                console.log('Using multimodal execution with image (fallback)');
+
+                // Append multimodal content to session
+                const messages = [
+                    { type: 'text', value: interpolatedPrompt }
+                ];
+
+                if (imageFile) {
+                    messages.push({ type: 'image', value: imageFile as any });
+                }
+
+                await session.append(messages);
+
+                // Execute prompt
+                response = await session.prompt('');
+            } else {
+                console.log('Using text-only execution (fallback)');
+
+                // Execute prompt (text only)
+                response = await session.prompt(interpolatedPrompt);
+            }
+
             session.destroy();
 
             console.log('Direct AI execution successful');
@@ -786,13 +841,44 @@ function formatResponse(response: string): string {
  * Show execution error
  */
 function showExecutionError(errorMessage: string) {
-    const errorHtml = `
-        <div class="error-message">
-            <h4>Execution Failed</h4>
-            <p>${escapeHtml(errorMessage)}</p>
-            <button onclick="retryExecution()" class="btn btn-secondary">Retry</button>
-        </div>
-    `;
+    // Check if this is a storage-related error
+    const isStorageError = errorMessage.toLowerCase().includes('not enough space') ||
+        errorMessage.toLowerCase().includes('insufficient space') ||
+        errorMessage.toLowerCase().includes('storage') ||
+        errorMessage.toLowerCase().includes('download');
+
+    let errorHtml: string;
+
+    if (isStorageError) {
+        errorHtml = `
+            <div class="error-message storage-error">
+                <h4>🚫 Insufficient Storage Space</h4>
+                <p>The AI model requires significant storage space to download and run locally.</p>
+                <div class="error-details">
+                    <h5>To resolve this issue:</h5>
+                    <ul>
+                        <li><strong>Free up disk space:</strong> Delete unnecessary files, empty trash, or move files to external storage</li>
+                        <li><strong>Check available space:</strong> Ensure you have at least 2-3 GB of free disk space</li>
+                        <li><strong>Close other applications:</strong> Free up memory by closing unused browser tabs and applications</li>
+                        <li><strong>Restart Chrome:</strong> Sometimes a browser restart helps with storage allocation</li>
+                    </ul>
+                    <p><small>Note: The AI model is downloaded once and stored locally for faster future use.</small></p>
+                </div>
+                <div class="error-actions">
+                    <button onclick="retryExecution()" class="btn btn-primary">Try Again</button>
+                    <button onclick="checkStorageSpace()" class="btn btn-secondary">Check Storage</button>
+                </div>
+            </div>
+        `;
+    } else {
+        errorHtml = `
+            <div class="error-message">
+                <h4>Execution Failed</h4>
+                <p>${escapeHtml(errorMessage)}</p>
+                <button onclick="retryExecution()" class="btn btn-secondary">Retry</button>
+            </div>
+        `;
+    }
 
     resultContentEl.innerHTML = errorHtml;
     document.getElementById('execution-result')!.style.display = 'block';
@@ -804,6 +890,80 @@ function showExecutionError(errorMessage: string) {
 function retryExecution() {
     if (currentRecipe && !isExecuting) {
         handleRecipeExecution(true);
+    }
+}
+
+/**
+ * Check available storage space and provide guidance
+ */
+async function checkStorageSpace() {
+    try {
+        // Check if Storage API is available
+        if ('storage' in navigator && 'estimate' in navigator.storage) {
+            const estimate = await navigator.storage.estimate();
+            const used = estimate.usage || 0;
+            const quota = estimate.quota || 0;
+            const available = quota - used;
+
+            const usedGB = (used / (1024 * 1024 * 1024)).toFixed(2);
+            const availableGB = (available / (1024 * 1024 * 1024)).toFixed(2);
+            const quotaGB = (quota / (1024 * 1024 * 1024)).toFixed(2);
+
+            const storageInfo = `
+                <div class="storage-info">
+                    <h5>📊 Storage Information</h5>
+                    <div class="storage-stats">
+                        <div class="stat">
+                            <span class="label">Used:</span>
+                            <span class="value">${usedGB} GB</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Available:</span>
+                            <span class="value ${available < 2 * 1024 * 1024 * 1024 ? 'warning' : 'good'}">${availableGB} GB</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Total Quota:</span>
+                            <span class="value">${quotaGB} GB</span>
+                        </div>
+                    </div>
+                    ${available < 2 * 1024 * 1024 * 1024 ?
+                    '<p class="warning">⚠️ Available space is below recommended 2GB for AI model download.</p>' :
+                    '<p class="success">✅ Sufficient storage space available.</p>'
+                }
+                </div>
+            `;
+
+            // Update the error message with storage info
+            const errorContainer = document.querySelector('.error-message');
+            if (errorContainer) {
+                const storageDiv = document.createElement('div');
+                storageDiv.innerHTML = storageInfo;
+                errorContainer.appendChild(storageDiv);
+            }
+        } else {
+            // Fallback message if Storage API is not available
+            const fallbackInfo = `
+                <div class="storage-info">
+                    <h5>📊 Storage Check</h5>
+                    <p>Storage API not available in this browser. Please manually check your disk space:</p>
+                    <ul>
+                        <li>Ensure you have at least 2-3 GB of free disk space</li>
+                        <li>Check your system's storage settings</li>
+                        <li>Consider freeing up space by deleting unnecessary files</li>
+                    </ul>
+                </div>
+            `;
+
+            const errorContainer = document.querySelector('.error-message');
+            if (errorContainer) {
+                const storageDiv = document.createElement('div');
+                storageDiv.innerHTML = fallbackInfo;
+                errorContainer.appendChild(storageDiv);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to check storage space:', error);
+        alert('Unable to check storage space. Please manually verify you have sufficient disk space.');
     }
 }
 
@@ -933,12 +1093,130 @@ function handleRerunResult() {
  */
 async function loadRecipes() {
     try {
+        // Show skeleton loading state
+        showSkeletonLoading();
+
         currentRecipes = await recipeManager.getAllRecipes();
         renderRecipeList();
     } catch (error) {
         console.error('Failed to load recipes:', error);
         currentRecipes = [];
         renderRecipeList();
+    }
+}
+
+/**
+ * Show skeleton loading state
+ */
+function showSkeletonLoading() {
+    if (!recipeListEl) return;
+
+    const skeletonHtml = `
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" id="search-recipes" placeholder="Search recipes..." class="search-input">
+            </div>
+            <div class="filter-container">
+                <select id="tag-filter" class="filter-select">
+                    <option value="">All Tags</option>
+                </select>
+            </div>
+        </div>
+        <br>    
+        <div class="recipe-list-header">
+            <div class="sort-container">
+                <select id="sort-recipes" class="sort-select">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="created-desc">Newest First</option>
+                    <option value="created-asc">Oldest First</option>
+                    <option value="lastUsed-desc">Recently Used</option>
+                </select>
+            </div>
+            <div class="new-recipe-container">
+                <button id="create-recipe-btn" class="btn btn-primary"> <svg class="w-[9px] h-[9px] text-gray-800" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 7.757v8.486M7.757 12h8.486M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+</svg>&nbsp;
+New Recipe</button>
+            </div>
+        </div>
+        <div class="recipe-list-content">
+            <div class="skeleton-loading">
+                <div class="skeleton-item">
+                    <div class="skeleton-header">
+                        <div class="skeleton-title"></div>
+                        <div class="skeleton-actions">
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-description"></div>
+                    <div class="skeleton-meta">
+                        <div class="skeleton-meta-item"></div>
+                        <div class="skeleton-meta-item"></div>
+                    </div>
+                </div>
+                <div class="skeleton-item">
+                    <div class="skeleton-header">
+                        <div class="skeleton-title"></div>
+                        <div class="skeleton-actions">
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-description"></div>
+                    <div class="skeleton-meta">
+                        <div class="skeleton-meta-item"></div>
+                        <div class="skeleton-meta-item"></div>
+                    </div>
+                </div>
+                <div class="skeleton-item">
+                    <div class="skeleton-header">
+                        <div class="skeleton-title"></div>
+                        <div class="skeleton-actions">
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                            <div class="skeleton-action"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-description"></div>
+                    <div class="skeleton-meta">
+                        <div class="skeleton-meta-item"></div>
+                        <div class="skeleton-meta-item"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    recipeListEl.innerHTML = skeletonHtml;
+
+    // Re-attach event listeners for search and sort
+    const newSearchInput = document.getElementById('search-recipes') as HTMLInputElement;
+    const newSortSelect = document.getElementById('sort-recipes') as HTMLSelectElement;
+    const newCreateBtn = document.getElementById('create-recipe-btn') as HTMLButtonElement;
+
+    if (newSearchInput) {
+        searchInput = newSearchInput;
+        newSearchInput.addEventListener('input', debounce(handleSearch, 300));
+    }
+
+    if (newSortSelect) {
+        sortSelect = newSortSelect;
+        newSortSelect.addEventListener('change', handleSortChange);
+    }
+
+    if (newCreateBtn) {
+        newCreateBtn.addEventListener('click', showRecipeForm);
     }
 }
 
@@ -2324,6 +2602,8 @@ function updateGuideButtonState() {
 (window as any).loadHistoryItem = loadHistoryItem;
 (window as any).copyHistoryResponse = copyHistoryResponse;
 (window as any).hideShortcutsHelp = hideShortcutsHelp;
+(window as any).checkStorageSpace = checkStorageSpace;
+(window as any).retryExecution = retryExecution;
 
 // Initialize when DOM is loaded
 if (document.readyState === 'loading') {

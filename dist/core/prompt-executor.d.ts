@@ -60,6 +60,14 @@ export declare class PromptExecutor {
      */
     executeRecipe(recipe: Recipe, userInput: string, options?: ExecutionOptions): Promise<ExecutionResult>;
     /**
+     * Execute a recipe with multimodal input (text and image)
+     */
+    executeRecipeMultimodal(recipe: Recipe, userInput: string, imageFile?: File, options?: ExecutionOptions): Promise<ExecutionResult>;
+    /**
+     * Execute a recipe with multimodal input and streaming response
+     */
+    executeRecipeMultimodalStreaming(recipe: Recipe, userInput: string, imageFile?: File, options?: ExecutionOptions): AsyncGenerator<string, ExecutionResult, unknown>;
+    /**
      * Execute a recipe with streaming response
      */
     executeRecipeStreaming(recipe: Recipe, userInput: string, options?: ExecutionOptions): AsyncGenerator<string, ExecutionResult, unknown>;

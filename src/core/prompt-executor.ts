@@ -156,6 +156,181 @@ export class PromptExecutor {
     }
 
     /**
+     * Execute a recipe with multimodal input (text and image)
+     */
+    public async executeRecipeMultimodal(
+        recipe: Recipe,
+        userInput: string,
+        imageFile?: File,
+        options: ExecutionOptions = {}
+    ): Promise<ExecutionResult> {
+        const startTime = Date.now();
+        const sessionId = this.generateSessionId();
+
+        try {
+            // Validate inputs
+            if (!recipe || (!userInput && !imageFile)) {
+                throw new PromptExecutorError(
+                    'Recipe and at least one input (text or image) are required',
+                    'INVALID_INPUTS'
+                );
+            }
+
+            // Check if AI client is available
+            if (!(await this.aiClient.isAvailable())) {
+                throw new PromptExecutorError(
+                    'AI client is not available. Please ensure Chrome AI API is enabled.',
+                    'AI_CLIENT_NOT_AVAILABLE'
+                );
+            }
+
+            // Interpolate prompt with user input
+            const interpolatedPrompt = interpolatePrompt(
+                recipe.prompt,
+                userInput || '',
+                options.sanitization
+            );
+
+            console.log('Executing multimodal recipe:', recipe.name);
+            console.log('Interpolated prompt:', interpolatedPrompt);
+            console.log('Image file:', imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'None');
+
+            // Execute multimodal prompt
+            const response = await this.aiClient.executeMultimodalPrompt(
+                interpolatedPrompt,
+                imageFile,
+                {
+                    temperature: options.temperature ?? 0.7,
+                    topK: options.topK ?? 40
+                }
+            );
+
+            const executionTime = Date.now() - startTime;
+
+            const result: ExecutionResult = {
+                success: true,
+                response,
+                executionTime,
+                tokensUsed: this.estimateTokenCount(interpolatedPrompt + response)
+            };
+
+            // Store execution history
+            this.executionHistory.set(sessionId, result);
+
+            return result;
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+
+            const result: ExecutionResult = {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                executionTime
+            };
+
+            // Store failed execution
+            this.executionHistory.set(sessionId, result);
+
+            console.error('Multimodal recipe execution failed:', error);
+            throw new PromptExecutorError(
+                'Failed to execute multimodal recipe',
+                'MULTIMODAL_EXECUTION_FAILED',
+                error as Error
+            );
+        }
+    }
+
+    /**
+     * Execute a recipe with multimodal input and streaming response
+     */
+    public async *executeRecipeMultimodalStreaming(
+        recipe: Recipe,
+        userInput: string,
+        imageFile?: File,
+        options: ExecutionOptions = {}
+    ): AsyncGenerator<string, ExecutionResult, unknown> {
+        const startTime = Date.now();
+        const sessionId = this.generateSessionId();
+
+        try {
+            // Validate inputs
+            if (!recipe || (!userInput && !imageFile)) {
+                throw new PromptExecutorError(
+                    'Recipe and at least one input (text or image) are required',
+                    'INVALID_INPUTS'
+                );
+            }
+
+            // Check if AI client is available
+            if (!(await this.aiClient.isAvailable())) {
+                throw new PromptExecutorError(
+                    'AI client is not available. Please ensure Chrome AI API is enabled.',
+                    'AI_CLIENT_NOT_AVAILABLE'
+                );
+            }
+
+            // Interpolate prompt with user input
+            const interpolatedPrompt = interpolatePrompt(
+                recipe.prompt,
+                userInput || '',
+                options.sanitization
+            );
+
+            console.log('Executing multimodal recipe with streaming:', recipe.name);
+
+            let fullResponse = '';
+            let tokenCount = 0;
+
+            // Execute multimodal streaming prompt
+            const stream = this.aiClient.executeMultimodalPromptStreaming(
+                interpolatedPrompt,
+                imageFile,
+                {
+                    temperature: options.temperature ?? 0.7,
+                    topK: options.topK ?? 40
+                }
+            );
+
+            for await (const chunk of stream) {
+                fullResponse += chunk;
+                tokenCount += this.estimateTokenCount(chunk);
+                yield chunk;
+            }
+
+            const executionTime = Date.now() - startTime;
+
+            const result: ExecutionResult = {
+                success: true,
+                response: fullResponse,
+                executionTime,
+                tokensUsed: tokenCount
+            };
+
+            // Store execution history
+            this.executionHistory.set(sessionId, result);
+
+            return result;
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+
+            const result: ExecutionResult = {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                executionTime
+            };
+
+            // Store failed execution
+            this.executionHistory.set(sessionId, result);
+
+            console.error('Multimodal streaming execution failed:', error);
+            throw new PromptExecutorError(
+                'Failed to execute multimodal recipe with streaming',
+                'MULTIMODAL_STREAMING_EXECUTION_FAILED',
+                error as Error
+            );
+        }
+    }
+
+    /**
      * Execute a recipe with streaming response
      */
     public async *executeRecipeStreaming(

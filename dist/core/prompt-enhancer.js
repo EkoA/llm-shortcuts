@@ -211,7 +211,8 @@ Enhanced prompt:`;
         // Create AI session directly
         const session = await aiWindow.LanguageModel.create({
             temperature: 0.3,
-            topK: 40
+            topK: 40,
+            outputLanguage: 'en'
         });
         try {
             // Create enhancement meta-prompt

@@ -135,7 +135,8 @@ async function executePrompt(
         // Create AI session
         const session = await aiWindow.LanguageModel.create({
             temperature: options?.temperature ?? 0.7,
-            topK: options?.topK ?? 40
+            topK: options?.topK ?? 40,
+            outputLanguage: 'en'
         });
 
         console.log('[Offscreen] AI session created, executing prompt...');
@@ -190,7 +191,8 @@ async function executePromptStreaming(
         // Create AI session
         const session = await aiWindow.LanguageModel.create({
             temperature: options?.temperature ?? 0.7,
-            topK: options?.topK ?? 40
+            topK: options?.topK ?? 40,
+            outputLanguage: 'en'
         });
 
         console.log('[Offscreen] AI session created, streaming prompt...');
@@ -222,6 +224,128 @@ async function executePromptStreaming(
 }
 
 /**
+ * Trigger model download proactively
+ * This follows Chrome AI best practices for model lifecycle management
+ */
+async function triggerModelDownload(): Promise<{
+    success: boolean;
+    status: 'unavailable' | 'downloadable' | 'downloading' | 'available';
+    error?: string;
+}> {
+    try {
+        console.log('[Offscreen] Triggering model download...');
+
+        if (!aiWindow.LanguageModel) {
+            return {
+                success: false,
+                status: 'unavailable',
+                error: 'Chrome AI API not available'
+            };
+        }
+
+        // Check current availability status
+        const availability = await aiWindow.LanguageModel.availability();
+        console.log('[Offscreen] Model availability status:', availability);
+
+        if (availability === 'unavailable') {
+            return {
+                success: false,
+                status: 'unavailable',
+                error: 'AI model is not available on this device'
+            };
+        }
+
+        if (availability === 'available') {
+            console.log('[Offscreen] Model is already available');
+            return {
+                success: true,
+                status: 'available'
+            };
+        }
+
+        if (availability === 'downloadable') {
+            console.log('[Offscreen] Triggering model download...');
+            // Create a session to trigger download
+            const session = await aiWindow.LanguageModel.create({
+                temperature: 0.7,
+                topK: 40
+            });
+
+            // Test with a simple prompt to ensure download starts
+            try {
+                await session.prompt('test');
+            } catch (error) {
+                // Expected error during download, continue monitoring
+                console.log('[Offscreen] Expected error during download:', error);
+            }
+
+            session.destroy();
+
+            // Monitor download progress
+            let downloadStatus: 'unavailable' | 'downloadable' | 'downloading' | 'available' = availability;
+            while (downloadStatus === 'downloading') {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                downloadStatus = await aiWindow.LanguageModel.availability();
+                console.log('[Offscreen] Download progress, status:', downloadStatus);
+            }
+
+            if (downloadStatus === 'available') {
+                console.log('[Offscreen] Model download completed successfully');
+                return {
+                    success: true,
+                    status: 'available'
+                };
+            } else {
+                return {
+                    success: false,
+                    status: downloadStatus,
+                    error: 'Model download failed or is not available'
+                };
+            }
+        }
+
+        if (availability === 'downloading') {
+            console.log('[Offscreen] Model is already downloading, monitoring progress...');
+            // Monitor existing download
+            let downloadStatus: 'unavailable' | 'downloadable' | 'downloading' | 'available' = availability;
+            while (downloadStatus === 'downloading') {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                downloadStatus = await aiWindow.LanguageModel.availability();
+                console.log('[Offscreen] Download progress, status:', downloadStatus);
+            }
+
+            if (downloadStatus === 'available') {
+                console.log('[Offscreen] Model download completed successfully');
+                return {
+                    success: true,
+                    status: 'available'
+                };
+            } else {
+                return {
+                    success: false,
+                    status: downloadStatus,
+                    error: 'Model download failed or is not available'
+                };
+            }
+        }
+
+        return {
+            success: false,
+            status: availability,
+            error: 'Unknown availability status'
+        };
+
+    } catch (error) {
+        console.error('[Offscreen] Error triggering model download:', error);
+        return {
+            success: false,
+            status: 'unavailable',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+/**
  * Listen for messages from background script
  */
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -238,6 +362,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         case 'EXECUTE_PROMPT_STREAMING':
             executePromptStreaming(message.prompt, message.options).then(sendResponse);
+            return true;
+
+        case 'TRIGGER_MODEL_DOWNLOAD':
+            triggerModelDownload().then(sendResponse);
             return true;
 
         default:

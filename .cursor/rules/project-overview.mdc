@@ -691,6 +691,7 @@ The following phases break down the technical development work into logical stag
 - Create fallback UI for catastrophic failures
   - "Something went wrong" screen
   - Clear cache/reset button
+- Review the app for any security vulnerabilities and address them
 
 **Deliverables:**
 - Comprehensive error handling

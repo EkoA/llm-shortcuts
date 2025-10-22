@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Test - LLM Shortcuts</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .test-section h3 {
+            margin-top: 0;
+        }
+
+        .result {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d00;
+        }
+
+        .success {
+            background: #e6ffe6;
+            color: #060;
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005a87;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>LLM Shortcuts - Multimodal Functionality Test</h1>
+
+    <div class="test-section">
+        <h3>Test 1: Text-only Execution</h3>
+        <p>Test basic text prompt execution without images.</p>
+        <textarea id="textInput" placeholder="Enter your text input here...">What is the capital of France?</textarea>
+        <button onclick="testTextOnly()">Test Text Only</button>
+        <div id="textResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Multimodal Execution (Text + Image)</h3>
+        <p>Test multimodal execution with both text and image input.</p>
+        <textarea id="multimodalTextInput"
+            placeholder="Enter your text input here...">Describe what you see in this image.</textarea>
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="testMultimodal()">Test Multimodal</button>
+        <div id="multimodalResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: Image-only Execution</h3>
+        <p>Test execution with only image input (no text).</p>
+        <input type="file" id="imageOnlyInput" accept="image/*">
+        <button onclick="testImageOnly()">Test Image Only</button>
+        <div id="imageOnlyResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>AI API Status</h3>
+        <div id="apiStatus" class="result">Checking AI API availability...</div>
+    </div>
+
+    <script>
+        // Check AI API availability
+        async function checkAIStatus() {
+            const statusEl = document.getElementById('apiStatus');
+
+            try {
+                if (!window.LanguageModel) {
+                    statusEl.textContent = '❌ Chrome AI API not available. Please ensure you are using Chrome 127+ with AI features enabled.';
+                    statusEl.className = 'result error';
+                    return false;
+                }
+
+                const availability = await window.LanguageModel.availability();
+                console.log('AI availability:', availability);
+
+                if (availability === 'unavailable') {
+                    statusEl.textContent = '❌ AI model is not available on this device.';
+                    statusEl.className = 'result error';
+                    return false;
+                }
+
+                if (availability === 'downloadable') {
+                    statusEl.textContent = '⚠️ AI model needs to be downloaded. This may take some time on first use.';
+                    statusEl.className = 'result';
+                } else if (availability === 'downloading') {
+                    statusEl.textContent = '⏳ AI model is currently downloading. Please wait...';
+                    statusEl.className = 'result';
+                } else if (availability === 'available') {
+                    statusEl.textContent = '✅ AI API is available and ready to use!';
+                    statusEl.className = 'result success';
+                }
+
+                return true;
+            } catch (error) {
+                statusEl.textContent = `❌ Error checking AI availability: ${error.message}`;
+                statusEl.className = 'result error';
+                return false;
+            }
+        }
+
+        // Test text-only execution
+        async function testTextOnly() {
+            const textInput = document.getElementById('textInput').value.trim();
+            const resultEl = document.getElementById('textResult');
+
+            if (!textInput) {
+                showResult(resultEl, 'Please enter some text input.', 'error');
+                return;
+            }
+
+            showResult(resultEl, 'Executing text-only prompt...', '');
+
+            try {
+                const session = await window.LanguageModel.create({
+                    temperature: 0.7,
+                    topK: 40
+                });
+
+                const response = await session.prompt(textInput);
+                session.destroy();
+
+                showResult(resultEl, `✅ Text-only execution successful!\n\nResponse: ${response}`, 'success');
+            } catch (error) {
+                showResult(resultEl, `❌ Text-only execution failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Test multimodal execution
+        async function testMultimodal() {
+            const textInput = document.getElementById('multimodalTextInput').value.trim();
+            const imageFile = document.getElementById('imageInput').files[0];
+            const resultEl = document.getElementById('multimodalResult');
+
+            if (!textInput && !imageFile) {
+                showResult(resultEl, 'Please provide either text input or an image (or both).', 'error');
+                return;
+            }
+
+            showResult(resultEl, 'Executing multimodal prompt...', '');
+
+            try {
+                const session = await window.LanguageModel.create({
+                    temperature: 0.7,
+                    topK: 40
+                });
+
+                let response;
+
+                if (imageFile) {
+                    // Use multimodal execution
+                    const messages = [];
+                    if (textInput) {
+                        messages.push({ type: 'text', value: textInput });
+                    }
+                    if (imageFile) {
+                        messages.push({ type: 'image', value: imageFile });
+                    }
+
+                    await session.append(messages);
+                    response = await session.prompt('');
+                } else {
+                    // Use text-only execution
+                    response = await session.prompt(textInput);
+                }
+
+                session.destroy();
+
+                showResult(resultEl, `✅ Multimodal execution successful!\n\nResponse: ${response}`, 'success');
+            } catch (error) {
+                showResult(resultEl, `❌ Multimodal execution failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Test image-only execution
+        async function testImageOnly() {
+            const imageFile = document.getElementById('imageOnlyInput').files[0];
+            const resultEl = document.getElementById('imageOnlyResult');
+
+            if (!imageFile) {
+                showResult(resultEl, 'Please select an image file.', 'error');
+                return;
+            }
+
+            showResult(resultEl, 'Executing image-only prompt...', '');
+
+            try {
+                const session = await window.LanguageModel.create({
+                    temperature: 0.7,
+                    topK: 40
+                });
+
+                // Use multimodal execution with image only
+                const messages = [
+                    { type: 'image', value: imageFile }
+                ];
+
+                await session.append(messages);
+                const response = await session.prompt('');
+
+                session.destroy();
+
+                showResult(resultEl, `✅ Image-only execution successful!\n\nResponse: ${response}`, 'success');
+            } catch (error) {
+                showResult(resultEl, `❌ Image-only execution failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Helper function to show results
+        function showResult(element, message, className) {
+            element.textContent = message;
+            element.className = `result ${className}`;
+            element.style.display = 'block';
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAIStatus();
+        });
+    </script>
+</body>
+
+</html>

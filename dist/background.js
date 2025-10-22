@@ -42,6 +42,25 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // Create offscreen document for AI access
     try {
         await createOffscreenDocument();
+        // Trigger model download following Chrome AI best practices
+        // This ensures the model is downloaded immediately after installation
+        // and managed independently of extension updates
+        console.log('Triggering model download after installation...');
+        try {
+            const downloadResult = await sendToOffscreen({
+                type: 'TRIGGER_MODEL_DOWNLOAD'
+            });
+            if (downloadResult.success) {
+                console.log('Model download initiated successfully:', downloadResult.status);
+            }
+            else {
+                console.warn('Model download failed or not needed:', downloadResult.error);
+            }
+        }
+        catch (error) {
+            console.error('Failed to trigger model download:', error);
+            // Don't fail installation if model download fails
+        }
     }
     catch (error) {
         console.error('Failed to create offscreen document:', error);
@@ -58,7 +77,7 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     console.log('[Background] Received message:', message.type);
     // Route AI-related messages to offscreen document
-    const aiMessageTypes = ['CHECK_AI_AVAILABILITY', 'EXECUTE_PROMPT', 'EXECUTE_PROMPT_STREAMING'];
+    const aiMessageTypes = ['CHECK_AI_AVAILABILITY', 'EXECUTE_PROMPT', 'EXECUTE_PROMPT_STREAMING', 'TRIGGER_MODEL_DOWNLOAD'];
     if (aiMessageTypes.includes(message.type)) {
         console.log('[Background] Routing to offscreen document:', message.type);
         sendToOffscreen(message)

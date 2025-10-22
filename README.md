@@ -1,6 +1,6 @@
 # LLM Shortcuts - Chrome Extension
 
-A Chrome extension that enables developers and users to create reusable LLM prompt templates ("recipes") with predefined inputs, eliminating repetitive prompt engineering and context switching across AI chat sessions.
+A Chrome extension that enables users to create reusable LLM prompt templates ("recipes"), eliminating repetitive prompt engineering and context switching across AI chat sessions.
 
 ## Phase 1 Implementation
 

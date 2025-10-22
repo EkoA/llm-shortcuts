@@ -142,7 +142,8 @@ export class AIClient {
         try {
             const session = await window.LanguageModel.create({
                 temperature: options?.temperature ?? 0.7,
-                topK: options?.topK ?? 40
+                topK: options?.topK ?? 40,
+                outputLanguage: 'en'
             });
             return session;
         }
@@ -189,6 +190,62 @@ export class AIClient {
         }
     }
     /**
+     * Execute a multimodal prompt with text and image
+     */
+    async executeMultimodalPrompt(textPrompt, imageFile, options) {
+        const session = await this.createSession(options);
+        try {
+            // Append multimodal content to session
+            const messages = [
+                { type: 'text', value: textPrompt }
+            ];
+            if (imageFile) {
+                messages.push({ type: 'image', value: imageFile });
+            }
+            await session.append(messages);
+            // Get response using prompt method
+            const response = await session.prompt('');
+            session.destroy();
+            return response;
+        }
+        catch (error) {
+            session.destroy();
+            if (error instanceof AIError) {
+                throw error;
+            }
+            throw new AIError('Failed to execute multimodal prompt', 'MULTIMODAL_EXECUTION_FAILED', error);
+        }
+    }
+    /**
+     * Execute a multimodal prompt with streaming response
+     */
+    async *executeMultimodalPromptStreaming(textPrompt, imageFile, options) {
+        const session = await this.createSession(options);
+        try {
+            // Append multimodal content to session
+            const messages = [
+                { type: 'text', value: textPrompt }
+            ];
+            if (imageFile) {
+                messages.push({ type: 'image', value: imageFile });
+            }
+            await session.append(messages);
+            // Get streaming response
+            const stream = session.promptStreaming('');
+            for await (const chunk of stream) {
+                yield chunk;
+            }
+            session.destroy();
+        }
+        catch (error) {
+            session.destroy();
+            if (error instanceof AIError) {
+                throw error;
+            }
+            throw new AIError('Failed to execute multimodal streaming prompt', 'MULTIMODAL_STREAMING_EXECUTION_FAILED', error);
+        }
+    }
+    /**
      * Test AI API availability and basic functionality
      */
     async testConnection() {
@@ -205,6 +262,114 @@ export class AIClient {
         catch (error) {
             return {
                 available: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+    /**
+     * Trigger model download proactively
+     * This should be called during extension installation to follow best practices
+     */
+    async triggerModelDownload() {
+        try {
+            // Check if LanguageModel is available
+            if (!window.LanguageModel) {
+                return {
+                    success: false,
+                    status: 'unavailable',
+                    error: 'Chrome AI API not available'
+                };
+            }
+            // Check current availability status
+            const availability = await window.LanguageModel.availability();
+            console.log('Model availability status:', availability);
+            if (availability === 'unavailable') {
+                return {
+                    success: false,
+                    status: 'unavailable',
+                    error: 'AI model is not available on this device'
+                };
+            }
+            if (availability === 'available') {
+                return {
+                    success: true,
+                    status: 'available'
+                };
+            }
+            if (availability === 'downloadable') {
+                console.log('Triggering model download...');
+                // Create a session to trigger download
+                const session = await window.LanguageModel.create({
+                    temperature: 0.7,
+                    topK: 40,
+                    outputLanguage: 'en'
+                });
+                // Test with a simple prompt to ensure download starts
+                try {
+                    await session.prompt('test');
+                }
+                catch (error) {
+                    // Expected error during download, continue monitoring
+                    console.log('Expected error during download:', error);
+                }
+                session.destroy();
+                // Monitor download progress
+                let downloadStatus = availability;
+                while (downloadStatus === 'downloading') {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    downloadStatus = await window.LanguageModel.availability();
+                    console.log('Download progress, status:', downloadStatus);
+                }
+                if (downloadStatus === 'available') {
+                    console.log('Model download completed successfully');
+                    return {
+                        success: true,
+                        status: 'available'
+                    };
+                }
+                else {
+                    return {
+                        success: false,
+                        status: downloadStatus,
+                        error: 'Model download failed or is not available'
+                    };
+                }
+            }
+            if (availability === 'downloading') {
+                console.log('Model is already downloading, monitoring progress...');
+                // Monitor existing download
+                let downloadStatus = availability;
+                while (downloadStatus === 'downloading') {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    downloadStatus = await window.LanguageModel.availability();
+                    console.log('Download progress, status:', downloadStatus);
+                }
+                if (downloadStatus === 'available') {
+                    console.log('Model download completed successfully');
+                    return {
+                        success: true,
+                        status: 'available'
+                    };
+                }
+                else {
+                    return {
+                        success: false,
+                        status: downloadStatus,
+                        error: 'Model download failed or is not available'
+                    };
+                }
+            }
+            return {
+                success: false,
+                status: availability,
+                error: 'Unknown availability status'
+            };
+        }
+        catch (error) {
+            console.error('Error triggering model download:', error);
+            return {
+                success: false,
+                status: 'unavailable',
                 error: error instanceof Error ? error.message : 'Unknown error'
             };
         }
@@ -240,10 +405,18 @@ export const isAIAvailable = async () => {
         return false;
     }
 };
+/**
+ * Trigger model download proactively
+ */
+export const triggerModelDownload = async () => {
+    const client = getAIClient();
+    return client.triggerModelDownload();
+};
 // Make functions available globally for browser environment
 if (typeof window !== 'undefined') {
     window.getAIClient = getAIClient;
     window.isAIAvailable = isAIAvailable;
+    window.triggerModelDownload = triggerModelDownload;
     console.log('AI Client: Functions exposed globally');
 }
 //# sourceMappingURL=ai-client.js.map

@@ -10,6 +10,10 @@ interface AICapabilities {
 interface AISession {
     prompt(prompt: string): Promise<string>;
     promptStreaming(prompt: string): AsyncIterable<string>;
+    append(messages: Array<{
+        type: string;
+        value: string | File;
+    }>): Promise<void>;
     destroy(): void;
 }
 interface AILanguageModel {
@@ -84,11 +88,34 @@ export declare class AIClient {
         topK?: number;
     }): AsyncGenerator<string, void, unknown>;
     /**
+     * Execute a multimodal prompt with text and image
+     */
+    executeMultimodalPrompt(textPrompt: string, imageFile?: File, options?: {
+        temperature?: number;
+        topK?: number;
+    }): Promise<string>;
+    /**
+     * Execute a multimodal prompt with streaming response
+     */
+    executeMultimodalPromptStreaming(textPrompt: string, imageFile?: File, options?: {
+        temperature?: number;
+        topK?: number;
+    }): AsyncGenerator<string, void, unknown>;
+    /**
      * Test AI API availability and basic functionality
      */
     testConnection(): Promise<{
         available: boolean;
         capabilities?: AICapabilities;
+        error?: string;
+    }>;
+    /**
+     * Trigger model download proactively
+     * This should be called during extension installation to follow best practices
+     */
+    triggerModelDownload(): Promise<{
+        success: boolean;
+        status: 'unavailable' | 'downloadable' | 'downloading' | 'available';
         error?: string;
     }>;
     /**
@@ -104,5 +131,13 @@ export declare const getAIClient: () => AIClient;
  * Check if Chrome AI API is available in the current environment
  */
 export declare const isAIAvailable: () => Promise<boolean>;
+/**
+ * Trigger model download proactively
+ */
+export declare const triggerModelDownload: () => Promise<{
+    success: boolean;
+    status: "unavailable" | "downloadable" | "downloading" | "available";
+    error?: string;
+}>;
 export {};
 //# sourceMappingURL=ai-client.d.ts.map
