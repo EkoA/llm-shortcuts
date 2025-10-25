@@ -3,6 +3,8 @@
  * Provides a clean interface for interacting with Chrome's on-device AI model
  */
 
+import { AppError, ErrorCategory, ErrorSeverity, errorHandler } from '../utils/error-handler';
+
 // Type definitions for Chrome AI API
 interface AICapabilities {
     canUseAI: boolean;
@@ -13,7 +15,7 @@ interface AICapabilities {
 interface AISession {
     prompt(prompt: string): Promise<string>;
     promptStreaming(prompt: string): AsyncIterable<string>;
-    append(messages: Array<{ type: string; value: string | File }>): Promise<void>;
+    append(messages: Array<{ role: string; type: string; content: string | File }>): Promise<void>;
     destroy(): void;
 }
 
@@ -155,13 +157,16 @@ export class AIClient {
                 return this.capabilities!;
             }
         } catch (error) {
-            const aiError = new AIError(
+            errorHandler.handleError(error as Error, 'AI Client initialization');
+            throw new AppError(
                 'Failed to initialize AI client',
                 'INITIALIZATION_FAILED',
-                error as Error
+                ErrorCategory.AI_API,
+                ErrorSeverity.CRITICAL,
+                error as Error,
+                true, // retryable
+                'AI initialization failed. Please check your Chrome settings and try again.'
             );
-            console.error('AI Client initialization failed:', aiError);
-            throw aiError;
         }
     }
 
@@ -245,14 +250,18 @@ export class AIClient {
         } catch (error) {
             session.destroy();
 
-            if (error instanceof AIError) {
+            if (error instanceof AppError) {
                 throw error;
             }
 
-            throw new AIError(
+            throw new AppError(
                 'Failed to execute prompt',
                 'PROMPT_EXECUTION_FAILED',
-                error as Error
+                ErrorCategory.AI_API,
+                ErrorSeverity.HIGH,
+                error as Error,
+                true, // retryable
+                'Failed to execute prompt. Please try again.'
             );
         }
     }
@@ -307,12 +316,12 @@ export class AIClient {
 
         try {
             // Append multimodal content to session
-            const messages: Array<{ type: string; value: string | File }> = [
-                { type: 'text', value: textPrompt }
+            const messages: Array<{ role: string; type: string; content: string | File }> = [
+                { role: 'user', type: 'text', content: textPrompt }
             ];
 
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
 
             await session.append(messages);
@@ -351,12 +360,12 @@ export class AIClient {
 
         try {
             // Append multimodal content to session
-            const messages: Array<{ type: string; value: string | File }> = [
-                { type: 'text', value: textPrompt }
+            const messages: Array<{ role: string; type: string; content: string | File }> = [
+                { role: 'user', type: 'text', content: textPrompt }
             ];
 
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
 
             await session.append(messages);

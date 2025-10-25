@@ -268,7 +268,8 @@ async function triggerModelDownload(): Promise<{
             // Create a session to trigger download
             const session = await aiWindow.LanguageModel.create({
                 temperature: 0.7,
-                topK: 40
+                topK: 40,
+                outputLanguage: 'en'
             });
 
             // Test with a simple prompt to ensure download starts

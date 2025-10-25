@@ -29,7 +29,7 @@ function debouncedBuild() {
             console.log('\n🔄 File changed, rebuilding...');
 
             try {
-                build();
+                build(true); // Pass true for development build
                 console.log('✅ Rebuild completed\n');
             } catch (error) {
                 console.error('❌ Rebuild failed:', error.message);
@@ -47,7 +47,7 @@ function startDevWatcher() {
     console.log('👀 Starting development watcher...\n');
 
     // Initial build
-    build();
+    build(true); // Pass true for development build
 
     // Watch for changes
     const watcher = chokidar.watch([

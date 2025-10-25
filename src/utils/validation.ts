@@ -4,6 +4,7 @@
  */
 
 import { Recipe, CreateRecipeData, UpdateRecipeData, RecipeValidationResult, RecipeInputType } from '../models/recipe.model';
+// Validation utilities don't need error handler imports
 
 /**
  * Validation error types
@@ -29,7 +30,12 @@ const VALIDATION_LIMITS = {
     PROMPT_MIN_LENGTH: 1,
     PROMPT_MAX_LENGTH: 10000,
     TAG_MAX_LENGTH: 50,
-    MAX_TAGS: 10
+    MAX_TAGS: 10,
+    // Edge case limits
+    MAX_SPECIAL_CHARS_RATIO: 0.3, // Max 30% special characters
+    MAX_CONSECUTIVE_SPECIAL: 3, // Max 3 consecutive special characters
+    MAX_EMPTY_LINES: 5, // Max 5 consecutive empty lines
+    MAX_REPEATED_CHARS: 5 // Max 5 consecutive repeated characters
 } as const;
 
 /**
@@ -307,6 +313,205 @@ export function sanitizeUserInput(input: string): string {
         .replace(/javascript:/gi, '') // Remove javascript: protocol
         .replace(/data:/gi, '') // Remove data: protocol
         .trim();
+}
+
+/**
+ * Validate edge cases for text input
+ */
+export function validateEdgeCases(text: string, fieldName: string): { isValid: boolean; error?: string; warning?: string } {
+    if (!text || typeof text !== 'string') {
+        return { isValid: false, error: `${fieldName} is required` };
+    }
+
+    const trimmedText = text.trim();
+
+    // Check for empty or whitespace-only input
+    if (trimmedText.length === 0) {
+        return { isValid: false, error: `${fieldName} cannot be empty` };
+    }
+
+    // Check for excessive special characters
+    const specialCharCount = (trimmedText.match(/[^a-zA-Z0-9\s]/g) || []).length;
+    const specialCharRatio = specialCharCount / trimmedText.length;
+
+    if (specialCharRatio > VALIDATION_LIMITS.MAX_SPECIAL_CHARS_RATIO) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many special characters (${Math.round(specialCharRatio * 100)}%)`
+        };
+    }
+
+    // Check for excessive consecutive special characters
+    const consecutiveSpecial = trimmedText.match(/[^a-zA-Z0-9\s]{4,}/g);
+    if (consecutiveSpecial) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many consecutive special characters`
+        };
+    }
+
+    // Check for excessive repeated characters
+    const repeatedChars = trimmedText.match(/(.)\1{4,}/g);
+    if (repeatedChars) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many repeated characters`
+        };
+    }
+
+    // Check for excessive empty lines
+    const emptyLines = trimmedText.split('\n').filter(line => line.trim().length === 0).length;
+    if (emptyLines > VALIDATION_LIMITS.MAX_EMPTY_LINES) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many empty lines`
+        };
+    }
+
+    // Check for potential prompt injection patterns
+    const injectionPatterns = [
+        /ignore\s+previous\s+instructions/gi,
+        /forget\s+everything/gi,
+        /you\s+are\s+now/gi,
+        /system\s+prompt/gi,
+        /act\s+as\s+if/gi
+    ];
+
+    for (const pattern of injectionPatterns) {
+        if (pattern.test(trimmedText)) {
+            return {
+                isValid: false,
+                error: `${fieldName} contains potentially malicious content`
+            };
+        }
+    }
+
+    // Check for very long single words (potential data dumps)
+    const words = trimmedText.split(/\s+/);
+    const longWords = words.filter(word => word.length > 50);
+    if (longWords.length > 0) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains unusually long words (${longWords.length} found)`
+        };
+    }
+
+    // Check for excessive repetition of the same word
+    const wordCounts: { [key: string]: number } = {};
+    words.forEach(word => {
+        const normalizedWord = word.toLowerCase();
+        wordCounts[normalizedWord] = (wordCounts[normalizedWord] || 0) + 1;
+    });
+
+    const maxWordCount = Math.max(...Object.values(wordCounts));
+    if (maxWordCount > words.length * 0.5) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains excessive repetition of the same word`
+        };
+    }
+
+    // Check for potential encoding issues
+    const encodingIssues = trimmedText.match(/[^\x00-\x7F]/g);
+    if (encodingIssues && encodingIssues.length > trimmedText.length * 0.1) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains unusual characters that may cause encoding issues`
+        };
+    }
+
+    return { isValid: true };
+}
+
+/**
+ * Validate prompt length and complexity
+ */
+export function validatePromptComplexity(prompt: string): { isValid: boolean; error?: string; warning?: string } {
+    if (!prompt || typeof prompt !== 'string') {
+        return { isValid: false, error: 'Prompt is required' };
+    }
+
+    const trimmedPrompt = prompt.trim();
+
+    // Check basic length
+    if (trimmedPrompt.length < VALIDATION_LIMITS.PROMPT_MIN_LENGTH) {
+        return { isValid: false, error: 'Prompt must be at least 1 character long' };
+    }
+
+    if (trimmedPrompt.length > VALIDATION_LIMITS.PROMPT_MAX_LENGTH) {
+        return { isValid: false, error: `Prompt must be no more than ${VALIDATION_LIMITS.PROMPT_MAX_LENGTH} characters long` };
+    }
+
+    // Check for edge cases
+    const edgeCaseResult = validateEdgeCases(trimmedPrompt, 'Prompt');
+    if (!edgeCaseResult.isValid) {
+        return edgeCaseResult;
+    }
+
+    // Check for prompt engineering best practices
+    const warnings: string[] = [];
+
+    // Check for placeholder usage
+    if (!trimmedPrompt.includes('{user_input}') && !trimmedPrompt.includes('{input}') && !trimmedPrompt.includes('{text}')) {
+        warnings.push('Consider adding a placeholder like {user_input} for dynamic content');
+    }
+
+    // Check for clear instructions
+    const instructionWords = ['please', 'analyze', 'summarize', 'explain', 'create', 'write', 'generate'];
+    const hasInstructions = instructionWords.some(word => trimmedPrompt.toLowerCase().includes(word));
+    if (!hasInstructions) {
+        warnings.push('Consider adding clear instructions for better AI responses');
+    }
+
+    // Check for context
+    if (trimmedPrompt.length < 20) {
+        warnings.push('Very short prompts may not provide enough context for good results');
+    }
+
+    return {
+        isValid: true,
+        ...(warnings.length > 0 && { warning: warnings.join('; ') })
+    };
+}
+
+/**
+ * Validate input for potential security issues
+ */
+export function validateSecurityInput(input: string): { isValid: boolean; error?: string } {
+    if (!input || typeof input !== 'string') {
+        return { isValid: false, error: 'Input is required' };
+    }
+
+    const trimmedInput = input.trim();
+
+    // Check for script injection patterns
+    const scriptPatterns = [
+        /<script[^>]*>/gi,
+        /javascript:/gi,
+        /vbscript:/gi,
+        /on\w+\s*=/gi,
+        /eval\s*\(/gi,
+        /function\s*\(/gi
+    ];
+
+    for (const pattern of scriptPatterns) {
+        if (pattern.test(trimmedInput)) {
+            return { isValid: false, error: 'Input contains potentially malicious script content' };
+        }
+    }
+
+    // Check for data URI patterns
+    if (/data:/gi.test(trimmedInput)) {
+        return { isValid: false, error: 'Input contains data URI which may be unsafe' };
+    }
+
+    // Check for excessive URL patterns
+    const urlCount = (trimmedInput.match(/https?:\/\/[^\s]+/g) || []).length;
+    if (urlCount > 5) {
+        return { isValid: false, error: 'Input contains too many URLs' };
+    }
+
+    return { isValid: true };
 }
 
 /**

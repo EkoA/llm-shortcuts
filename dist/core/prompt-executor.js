@@ -4,6 +4,7 @@
  */
 import { AIClient } from './ai-client';
 import { interpolatePrompt, sanitizeInput } from '../utils/prompt-interpolation';
+import { AppError, ErrorCategory, ErrorSeverity, handleWithRetry, handleWithTimeout } from '../utils/error-handler';
 /**
  * Error types for prompt execution
  */
@@ -43,21 +44,22 @@ export class PromptExecutor {
         try {
             // Validate inputs
             if (!recipe || !userInput) {
-                throw new PromptExecutorError('Recipe and user input are required', 'INVALID_INPUTS');
+                throw new AppError('Recipe and user input are required', 'INVALID_INPUTS', ErrorCategory.VALIDATION, ErrorSeverity.LOW, undefined, false, 'Please provide both a recipe and user input.');
             }
             // Check if AI client is available
             if (!(await this.aiClient.isAvailable())) {
-                throw new PromptExecutorError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE');
+                throw new AppError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE', ErrorCategory.AI_API, ErrorSeverity.CRITICAL, undefined, true, 'AI features are not available. Please check your Chrome settings.');
             }
             // Interpolate prompt with user input
             const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, options.sanitization);
             console.log('Executing recipe:', recipe.name);
             console.log('Interpolated prompt:', interpolatedPrompt);
-            // Execute prompt
-            const response = await this.aiClient.executePrompt(interpolatedPrompt, {
+            // Execute prompt with retry logic and timeout
+            const response = await handleWithRetry(() => handleWithTimeout(() => this.aiClient.executePrompt(interpolatedPrompt, {
                 temperature: options.temperature ?? 0.7,
                 topK: options.topK ?? 40
-            });
+            }), options.timeout ?? 30000, // 30 second timeout
+            'Recipe execution'), 'Recipe execution');
             const executionTime = Date.now() - startTime;
             const result = {
                 success: true,
@@ -79,7 +81,10 @@ export class PromptExecutor {
             // Store failed execution
             this.executionHistory.set(sessionId, result);
             console.error('Recipe execution failed:', error);
-            throw new PromptExecutorError('Failed to execute recipe', 'EXECUTION_FAILED', error);
+            if (error instanceof AppError) {
+                throw error;
+            }
+            throw new AppError('Failed to execute recipe', 'EXECUTION_FAILED', ErrorCategory.AI_API, ErrorSeverity.HIGH, error, true, 'Failed to execute recipe. Please try again.');
         }
     }
     /**

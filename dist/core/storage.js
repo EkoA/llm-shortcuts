@@ -2,6 +2,7 @@
  * Chrome Storage API wrapper
  * Provides a clean async/await interface for Chrome extension storage operations
  */
+import { AppError, ErrorCategory, ErrorSeverity, errorHandler } from '../utils/error-handler';
 /**
  * Storage error types
  */
@@ -54,7 +55,9 @@ export class StorageService {
             return this.validateAndMigrateData(data);
         }
         catch (error) {
-            throw new StorageError('Failed to retrieve data from storage', 'GET_DATA_FAILED', error);
+            errorHandler.handleError(error, 'Storage get data');
+            throw new AppError('Failed to retrieve data from storage', 'GET_DATA_FAILED', ErrorCategory.STORAGE, ErrorSeverity.HIGH, error, true, // retryable
+            'Failed to load data. Please try again.');
         }
     }
     /**
@@ -217,6 +220,56 @@ export class StorageService {
         await this.saveAllData(data);
     }
     /**
+     * Get onboarding state from storage
+     */
+    async getOnboardingState() {
+        const data = await this.getAllData();
+        return data.onboarding || {
+            completed: false,
+            currentStep: 0,
+            totalSteps: 5,
+            showAgain: true
+        };
+    }
+    /**
+     * Update onboarding state in storage
+     */
+    async updateOnboardingState(onboarding) {
+        const data = await this.getAllData();
+        data.onboarding = onboarding;
+        await this.saveAllData(data);
+    }
+    /**
+     * Mark onboarding as completed
+     */
+    async completeOnboarding() {
+        const data = await this.getAllData();
+        if (!data.onboarding) {
+            data.onboarding = {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            };
+        }
+        data.onboarding.completed = true;
+        data.onboarding.completedAt = Date.now();
+        await this.saveAllData(data);
+    }
+    /**
+     * Reset onboarding state
+     */
+    async resetOnboarding() {
+        const data = await this.getAllData();
+        data.onboarding = {
+            completed: false,
+            currentStep: 0,
+            totalSteps: 5,
+            showAgain: true
+        };
+        await this.saveAllData(data);
+    }
+    /**
      * Get default storage schema
      */
     getDefaultSchema() {
@@ -225,7 +278,13 @@ export class StorageService {
                 version: this.STORAGE_VERSION,
                 lastUpdated: Date.now()
             },
-            recipes: []
+            recipes: [],
+            onboarding: {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            }
         };
     }
     /**
@@ -247,6 +306,15 @@ export class StorageService {
         // Ensure recipes array exists
         if (!Array.isArray(data.recipes)) {
             data.recipes = [];
+        }
+        // Ensure onboarding state exists
+        if (!data.onboarding) {
+            data.onboarding = {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            };
         }
         // Migrate data if version is different
         if (data.version.version !== this.STORAGE_VERSION) {

@@ -3,6 +3,9 @@
  * Handles replacement of placeholders in prompt templates with user input
  */
 
+import { validateSecurityInput, validateEdgeCases } from './validation';
+import { AppError, ErrorCategory, ErrorSeverity } from './error-handler';
+
 /**
  * Error types for prompt interpolation
  */
@@ -81,16 +84,54 @@ export function interpolatePrompt(
 ): string {
     try {
         if (!template || typeof template !== 'string') {
-            throw new PromptInterpolationError(
+            throw new AppError(
                 'Invalid prompt template',
-                'INVALID_TEMPLATE'
+                'INVALID_TEMPLATE',
+                ErrorCategory.VALIDATION,
+                ErrorSeverity.LOW,
+                undefined,
+                false,
+                'Please provide a valid prompt template.'
             );
         }
 
         if (typeof userInput !== 'string') {
-            throw new PromptInterpolationError(
+            throw new AppError(
                 'User input must be a string',
-                'INVALID_INPUT'
+                'INVALID_INPUT',
+                ErrorCategory.VALIDATION,
+                ErrorSeverity.LOW,
+                undefined,
+                false,
+                'Please provide valid user input.'
+            );
+        }
+
+        // Validate security of user input
+        const securityValidation = validateSecurityInput(userInput);
+        if (!securityValidation.isValid) {
+            throw new AppError(
+                securityValidation.error!,
+                'SECURITY_VALIDATION_FAILED',
+                ErrorCategory.VALIDATION,
+                ErrorSeverity.HIGH,
+                undefined,
+                false,
+                'Input contains potentially unsafe content.'
+            );
+        }
+
+        // Validate edge cases
+        const edgeCaseValidation = validateEdgeCases(userInput, 'User input');
+        if (!edgeCaseValidation.isValid) {
+            throw new AppError(
+                edgeCaseValidation.error!,
+                'EDGE_CASE_VALIDATION_FAILED',
+                ErrorCategory.VALIDATION,
+                ErrorSeverity.MEDIUM,
+                undefined,
+                false,
+                'Input contains unusual patterns that may cause issues.'
             );
         }
 
@@ -113,7 +154,8 @@ export function interpolatePrompt(
 
         // CRITICAL: If no placeholders were found and replaced, append the user input
         // This ensures user input is always included even if the template has no placeholders
-        if (interpolated === template) {
+        // BUT: Only append if user input is not empty (for image-only recipes)
+        if (interpolated === template && sanitizedInput.trim().length > 0) {
             // No placeholders were replaced, so append the user input
             interpolated = template + ' ' + sanitizedInput;
         }

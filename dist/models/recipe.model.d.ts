@@ -114,6 +114,21 @@ export interface UserGuide {
     updatedAt: number;
 }
 /**
+ * Onboarding state for first-time users
+ */
+export interface OnboardingState {
+    /** Whether the user has completed onboarding */
+    completed: boolean;
+    /** Current step in the onboarding process */
+    currentStep: number;
+    /** Total number of onboarding steps */
+    totalSteps: number;
+    /** When onboarding was completed */
+    completedAt?: number;
+    /** Whether to show onboarding again */
+    showAgain: boolean;
+}
+/**
  * Complete storage schema
  */
 export interface StorageSchema {
@@ -121,6 +136,8 @@ export interface StorageSchema {
     recipes: Recipe[];
     /** Optional user guide for persistent context */
     guide?: UserGuide;
+    /** Onboarding state for first-time users */
+    onboarding?: OnboardingState;
 }
 /**
  * Recipe statistics for analytics

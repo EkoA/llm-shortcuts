@@ -2,7 +2,7 @@
  * Chrome Storage API wrapper
  * Provides a clean async/await interface for Chrome extension storage operations
  */
-import { Recipe, StorageSchema } from '../models/recipe.model';
+import { Recipe, StorageSchema, OnboardingState } from '../models/recipe.model';
 /**
  * Storage error types
  */
@@ -99,6 +99,22 @@ export declare class StorageService {
      * Clear user guide from storage
      */
     clearGuide(): Promise<void>;
+    /**
+     * Get onboarding state from storage
+     */
+    getOnboardingState(): Promise<OnboardingState>;
+    /**
+     * Update onboarding state in storage
+     */
+    updateOnboardingState(onboarding: OnboardingState): Promise<void>;
+    /**
+     * Mark onboarding as completed
+     */
+    completeOnboarding(): Promise<void>;
+    /**
+     * Reset onboarding state
+     */
+    resetOnboarding(): Promise<void>;
     /**
      * Get default storage schema
      */

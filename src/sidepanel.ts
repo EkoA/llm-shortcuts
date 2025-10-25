@@ -18,6 +18,15 @@ declare const getPromptExecutor: () => any;
 // Prompt interpolation utilities will be loaded via script tag
 declare const interpolatePrompt: (template: string, userInput: string, options?: any, guide?: string) => string;
 
+// Error handling utilities will be loaded via script tag
+declare const setupGlobalErrorHandling: () => void;
+declare const showCriticalError: (error: any) => void;
+declare const fallbackUI: any;
+
+// Security audit utilities will be loaded via script tag
+declare const performSecurityAudit: () => Promise<any>;
+declare const generateSecurityReport: (auditResult: any) => string;
+
 // Prompt Enhancer will be loaded via script tag
 declare const PromptEnhancer: any;
 declare const getPromptEnhancer: () => any;
@@ -88,6 +97,11 @@ let isEnhancing = false;
 let currentEnhancement: any = null;
 let userGuide: string = '';
 
+// Onboarding state
+let onboardingState: any = null;
+let currentOnboardingStep = 1;
+const totalOnboardingSteps = 5;
+
 // Response history state
 let responseHistory: Map<string, ResponseHistoryItem[]> = new Map();
 let currentHistoryIndex = -1;
@@ -101,6 +115,25 @@ let streamingAnimationFrame: number | null = null;
  */
 async function initialize() {
     console.log('Initializing LLM Shortcuts side panel');
+
+    // Setup global error handling
+    if (typeof setupGlobalErrorHandling === 'function') {
+        setupGlobalErrorHandling();
+    }
+
+    // Perform security audit
+    if (typeof performSecurityAudit === 'function') {
+        try {
+            const auditResult = await performSecurityAudit();
+            if (!auditResult.isSecure) {
+                console.warn('Security vulnerabilities detected:', auditResult.vulnerabilities);
+                const report = generateSecurityReport(auditResult);
+                console.log('Security Report:', report);
+            }
+        } catch (error) {
+            console.error('Security audit failed:', error);
+        }
+    }
 
     // Initialize recipe manager
     recipeManager = new RecipeManager();
@@ -131,6 +164,9 @@ async function initialize() {
 
     // Load user guide
     await loadGuide();
+
+    // Check if onboarding should be shown
+    await checkAndShowOnboarding();
 }
 
 /**
@@ -239,6 +275,10 @@ function setupEventListeners() {
     acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
     rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
 
+    // Tutorial button
+    const showTutorialBtn = document.getElementById('show-tutorial-btn') as HTMLButtonElement;
+    showTutorialBtn?.addEventListener('click', showTutorial);
+
     // Guide management
     const toggleGuideBtn = document.getElementById('toggle-guide-btn') as HTMLButtonElement;
     const closeGuideModalBtn = document.getElementById('close-guide-modal') as HTMLButtonElement;
@@ -254,6 +294,19 @@ function setupEventListeners() {
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
+
+    // Onboarding event listeners
+    const closeOnboardingBtn = document.getElementById('close-onboarding-modal') as HTMLButtonElement;
+    const onboardingSkipBtn = document.getElementById('onboarding-skip') as HTMLButtonElement;
+    const onboardingPrevBtn = document.getElementById('onboarding-prev') as HTMLButtonElement;
+    const onboardingNextBtn = document.getElementById('onboarding-next') as HTMLButtonElement;
+    const onboardingCompleteBtn = document.getElementById('onboarding-complete') as HTMLButtonElement;
+
+    closeOnboardingBtn?.addEventListener('click', hideOnboardingModal);
+    onboardingSkipBtn?.addEventListener('click', skipOnboarding);
+    onboardingPrevBtn?.addEventListener('click', previousOnboardingStep);
+    onboardingNextBtn?.addEventListener('click', nextOnboardingStep);
+    onboardingCompleteBtn?.addEventListener('click', completeOnboarding);
 }
 
 /**
@@ -506,11 +559,40 @@ async function executeWithStreaming(recipe: Recipe, userInput: string, imageFile
         console.log('Executing recipe with streaming:', recipe.name);
 
         // Use proper prompt interpolation with sanitization and guide
-        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
-            maxLength: 10000,
-            allowHtml: false,
-            escapeSpecialChars: true
-        }, userGuide);
+        let interpolatedPrompt: string;
+
+        if (userInput.trim().length > 0) {
+            // Text input provided - use normal interpolation
+            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+                maxLength: 10000,
+                allowHtml: false,
+                escapeSpecialChars: true
+            }, userGuide);
+        } else if (imageFile) {
+            // Image-only input - modify prompt to work with images
+            let imagePrompt = recipe.prompt;
+
+            // If the prompt contains text input placeholders, modify it for image input
+            if (imagePrompt.includes('{user_input}') || imagePrompt.includes('{userInput}') ||
+                imagePrompt.includes('{input}') || imagePrompt.includes('{text}') ||
+                imagePrompt.includes('{content}')) {
+                // Replace text input placeholders with image instruction
+                imagePrompt = imagePrompt
+                    .replace(/\{user_input\}/g, 'the content in the provided image')
+                    .replace(/\{userInput\}/g, 'the content in the provided image')
+                    .replace(/\{input\}/g, 'the content in the provided image')
+                    .replace(/\{text\}/g, 'the content in the provided image')
+                    .replace(/\{content\}/g, 'the content in the provided image');
+            } else {
+                // If no placeholders, append instruction to work with the image
+                imagePrompt += ' Please analyze the provided image and work with its content.';
+            }
+
+            interpolatedPrompt = imagePrompt + (userGuide ? '\n\n' + userGuide : '');
+        } else {
+            // No input provided - use original prompt
+            interpolatedPrompt = recipe.prompt + (userGuide ? '\n\n' + userGuide : '');
+        }
 
         // Log image file if provided
         if (imageFile) {
@@ -544,11 +626,11 @@ async function executeWithStreaming(recipe: Recipe, userInput: string, imageFile
 
                 // Append multimodal content to session
                 const messages = [
-                    { type: 'text', value: interpolatedPrompt }
+                    { role: 'user', type: 'text', content: interpolatedPrompt }
                 ];
 
                 if (imageFile) {
-                    messages.push({ type: 'image', value: imageFile as any });
+                    messages.push({ role: 'user', type: 'image', content: imageFile as any });
                 }
 
                 await session.append(messages);
@@ -606,11 +688,40 @@ async function executeWithContentScript(recipe: Recipe, userInput: string, image
         console.log('Executing recipe via direct AI access:', recipe.name);
 
         // Use proper prompt interpolation with sanitization and guide
-        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
-            maxLength: 10000,
-            allowHtml: false,
-            escapeSpecialChars: true
-        }, userGuide);
+        let interpolatedPrompt: string;
+
+        if (userInput.trim().length > 0) {
+            // Text input provided - use normal interpolation
+            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+                maxLength: 10000,
+                allowHtml: false,
+                escapeSpecialChars: true
+            }, userGuide);
+        } else if (imageFile) {
+            // Image-only input - modify prompt to work with images
+            let imagePrompt = recipe.prompt;
+
+            // If the prompt contains text input placeholders, modify it for image input
+            if (imagePrompt.includes('{user_input}') || imagePrompt.includes('{userInput}') ||
+                imagePrompt.includes('{input}') || imagePrompt.includes('{text}') ||
+                imagePrompt.includes('{content}')) {
+                // Replace text input placeholders with image instruction
+                imagePrompt = imagePrompt
+                    .replace(/\{user_input\}/g, 'the content in the provided image')
+                    .replace(/\{userInput\}/g, 'the content in the provided image')
+                    .replace(/\{input\}/g, 'the content in the provided image')
+                    .replace(/\{text\}/g, 'the content in the provided image')
+                    .replace(/\{content\}/g, 'the content in the provided image');
+            } else {
+                // If no placeholders, append instruction to work with the image
+                imagePrompt += ' Please analyze the provided image and work with its content.';
+            }
+
+            interpolatedPrompt = imagePrompt + (userGuide ? '\n\n' + userGuide : '');
+        } else {
+            // No input provided - use original prompt
+            interpolatedPrompt = recipe.prompt + (userGuide ? '\n\n' + userGuide : '');
+        }
 
         // Log image file if provided (for future implementation)
         if (imageFile) {
@@ -641,11 +752,11 @@ async function executeWithContentScript(recipe: Recipe, userInput: string, image
 
                 // Append multimodal content to session
                 const messages = [
-                    { type: 'text', value: interpolatedPrompt }
+                    { role: 'user', type: 'text', content: interpolatedPrompt }
                 ];
 
                 if (imageFile) {
-                    messages.push({ type: 'image', value: imageFile as any });
+                    messages.push({ role: 'user', type: 'image', content: imageFile as any });
                 }
 
                 await session.append(messages);
@@ -2303,6 +2414,22 @@ function handleKeyboardShortcuts(event: KeyboardEvent) {
                 showShortcutsHelp();
             }
             break;
+        case 'arrowleft':
+            // Check if onboarding modal is open
+            const onboardingModal = document.getElementById('onboarding-modal') as HTMLElement;
+            if (onboardingModal && onboardingModal.style.display !== 'none') {
+                event.preventDefault();
+                previousOnboardingStep();
+            }
+            break;
+        case 'arrowright':
+            // Check if onboarding modal is open
+            const onboardingModalRight = document.getElementById('onboarding-modal') as HTMLElement;
+            if (onboardingModalRight && onboardingModalRight.style.display !== 'none') {
+                event.preventDefault();
+                nextOnboardingStep();
+            }
+            break;
     }
 }
 
@@ -2330,6 +2457,13 @@ function handleEscapeKey() {
     const shortcutsHelp = document.getElementById('shortcuts-help') as HTMLElement;
     if (shortcutsHelp && shortcutsHelp.classList.contains('show')) {
         hideShortcutsHelp();
+        return;
+    }
+
+    // If onboarding modal is open, close it
+    const onboardingModal = document.getElementById('onboarding-modal') as HTMLElement;
+    if (onboardingModal && onboardingModal.style.display !== 'none') {
+        hideOnboardingModal();
         return;
     }
 
@@ -2595,6 +2729,209 @@ function updateGuideButtonState() {
     } else {
         toggleGuideBtn.classList.remove('active');
         toggleGuideBtn.title = 'Set Guide';
+    }
+}
+
+/**
+ * Check if onboarding should be shown
+ */
+async function checkAndShowOnboarding() {
+    try {
+        if (!storageService) {
+            console.warn('Storage service not available for onboarding check');
+            return;
+        }
+
+        onboardingState = await storageService.getOnboardingState();
+        console.log('Onboarding state:', onboardingState);
+
+        // Show onboarding if not completed or if user wants to see it again
+        if (!onboardingState.completed || onboardingState.showAgain) {
+            currentOnboardingStep = onboardingState.currentStep || 1;
+            showOnboardingModal();
+        }
+    } catch (error) {
+        console.error('Failed to check onboarding state:', error);
+        // Show onboarding by default if there's an error
+        showOnboardingModal();
+    }
+}
+
+/**
+ * Show onboarding modal
+ */
+function showOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal') as HTMLElement;
+    if (onboardingModal) {
+        onboardingModal.style.display = 'flex';
+        updateOnboardingStep();
+    }
+}
+
+/**
+ * Hide onboarding modal
+ */
+function hideOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal') as HTMLElement;
+    if (onboardingModal) {
+        onboardingModal.style.display = 'none';
+    }
+}
+
+/**
+ * Skip onboarding
+ */
+async function skipOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.completeOnboarding();
+        }
+        hideOnboardingModal();
+    } catch (error) {
+        console.error('Failed to skip onboarding:', error);
+        hideOnboardingModal();
+    }
+}
+
+/**
+ * Go to previous onboarding step
+ */
+function previousOnboardingStep() {
+    if (currentOnboardingStep > 1) {
+        currentOnboardingStep--;
+        updateOnboardingStep();
+    }
+}
+
+/**
+ * Go to next onboarding step
+ */
+function nextOnboardingStep() {
+    if (currentOnboardingStep < totalOnboardingSteps) {
+        currentOnboardingStep++;
+        updateOnboardingStep();
+    }
+}
+
+/**
+ * Complete onboarding
+ */
+async function completeOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.completeOnboarding();
+        }
+        hideOnboardingModal();
+
+        // Show restart onboarding button
+        showRestartOnboardingButton();
+
+        // Show success message
+        console.log('Onboarding completed successfully');
+    } catch (error) {
+        console.error('Failed to complete onboarding:', error);
+        hideOnboardingModal();
+    }
+}
+
+/**
+ * Restart onboarding
+ */
+async function restartOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.resetOnboarding();
+        }
+        currentOnboardingStep = 1;
+        showOnboardingModal();
+    } catch (error) {
+        console.error('Failed to restart onboarding:', error);
+    }
+}
+
+/**
+ * Show tutorial
+ */
+function showTutorial() {
+    currentOnboardingStep = 1;
+    showOnboardingModal();
+}
+
+/**
+ * Show restart onboarding button
+ */
+function showRestartOnboardingButton() {
+    const restartBtn = document.getElementById('restart-onboarding-btn') as HTMLButtonElement;
+    if (restartBtn) {
+        restartBtn.style.display = 'inline-flex';
+    }
+}
+
+/**
+ * Update onboarding step display
+ */
+function updateOnboardingStep() {
+    // Hide all steps
+    for (let i = 1; i <= totalOnboardingSteps; i++) {
+        const step = document.getElementById(`onboarding-step-${i}`) as HTMLElement;
+        if (step) {
+            step.style.display = 'none';
+        }
+    }
+
+    // Show current step
+    const currentStep = document.getElementById(`onboarding-step-${currentOnboardingStep}`) as HTMLElement;
+    if (currentStep) {
+        currentStep.style.display = 'block';
+    }
+
+    // Update progress bar
+    const progressFill = document.getElementById('onboarding-progress-fill') as HTMLElement;
+    if (progressFill) {
+        const progress = (currentOnboardingStep / totalOnboardingSteps) * 100;
+        progressFill.style.width = `${progress}%`;
+    }
+
+    // Update progress text
+    const progressText = document.getElementById('onboarding-progress-text') as HTMLElement;
+    if (progressText) {
+        progressText.textContent = `Step ${currentOnboardingStep} of ${totalOnboardingSteps}`;
+    }
+
+    // Update button visibility
+    const prevBtn = document.getElementById('onboarding-prev') as HTMLButtonElement;
+    const nextBtn = document.getElementById('onboarding-next') as HTMLButtonElement;
+    const completeBtn = document.getElementById('onboarding-complete') as HTMLButtonElement;
+
+    if (prevBtn) {
+        prevBtn.style.display = currentOnboardingStep > 1 ? 'inline-flex' : 'none';
+    }
+
+    if (nextBtn && completeBtn) {
+        if (currentOnboardingStep === totalOnboardingSteps) {
+            nextBtn.style.display = 'none';
+            completeBtn.style.display = 'inline-flex';
+        } else {
+            nextBtn.style.display = 'inline-flex';
+            completeBtn.style.display = 'none';
+        }
+    }
+
+    // Update onboarding state in storage
+    updateOnboardingStateInStorage();
+}
+
+/**
+ * Update onboarding state in storage
+ */
+async function updateOnboardingStateInStorage() {
+    try {
+        if (storageService && onboardingState) {
+            onboardingState.currentStep = currentOnboardingStep;
+            await storageService.updateOnboardingState(onboardingState);
+        }
+    } catch (error) {
+        console.error('Failed to update onboarding state:', error);
     }
 }
 

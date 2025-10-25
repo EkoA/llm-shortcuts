@@ -306,9 +306,17 @@ function createDevBuild() {
 }
 
 /**
+ * Create production build (no modifications)
+ */
+function createProductionBuild() {
+    console.log('🚀 Creating production build...');
+    console.log('✅ Production build created');
+}
+
+/**
  * Main build function
  */
-function build() {
+function build(isDev = false) {
     console.log('🔨  Building LLM Shortcuts Chrome Extension...\n');
 
     try {
@@ -318,7 +326,13 @@ function build() {
         copyCompiledJS();
         bundleSidepanel();
         cleanupSrcDir();
-        createDevBuild();
+
+        // Only add dev markers if this is a development build
+        if (isDev) {
+            createDevBuild();
+        } else {
+            createProductionBuild();
+        }
 
         console.log('\n🎉 Build completed successfully!');
         console.log(`📦 Extension files are in: ${DIST_DIR}/`);

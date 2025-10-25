@@ -2,6 +2,7 @@
  * Chrome Built-in AI Prompt API wrapper
  * Provides a clean interface for interacting with Chrome's on-device AI model
  */
+import { AppError, ErrorCategory, ErrorSeverity, errorHandler } from '../utils/error-handler';
 /**
  * Error types for AI API operations
  */
@@ -100,9 +101,9 @@ export class AIClient {
             }
         }
         catch (error) {
-            const aiError = new AIError('Failed to initialize AI client', 'INITIALIZATION_FAILED', error);
-            console.error('AI Client initialization failed:', aiError);
-            throw aiError;
+            errorHandler.handleError(error, 'AI Client initialization');
+            throw new AppError('Failed to initialize AI client', 'INITIALIZATION_FAILED', ErrorCategory.AI_API, ErrorSeverity.CRITICAL, error, true, // retryable
+            'AI initialization failed. Please check your Chrome settings and try again.');
         }
     }
     /**
@@ -163,10 +164,11 @@ export class AIClient {
         }
         catch (error) {
             session.destroy();
-            if (error instanceof AIError) {
+            if (error instanceof AppError) {
                 throw error;
             }
-            throw new AIError('Failed to execute prompt', 'PROMPT_EXECUTION_FAILED', error);
+            throw new AppError('Failed to execute prompt', 'PROMPT_EXECUTION_FAILED', ErrorCategory.AI_API, ErrorSeverity.HIGH, error, true, // retryable
+            'Failed to execute prompt. Please try again.');
         }
     }
     /**
@@ -197,10 +199,10 @@ export class AIClient {
         try {
             // Append multimodal content to session
             const messages = [
-                { type: 'text', value: textPrompt }
+                { role: 'user', type: 'text', content: textPrompt }
             ];
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
             await session.append(messages);
             // Get response using prompt method
@@ -224,10 +226,10 @@ export class AIClient {
         try {
             // Append multimodal content to session
             const messages = [
-                { type: 'text', value: textPrompt }
+                { role: 'user', type: 'text', content: textPrompt }
             ];
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
             await session.append(messages);
             // Get streaming response

@@ -11,8 +11,9 @@ interface AISession {
     prompt(prompt: string): Promise<string>;
     promptStreaming(prompt: string): AsyncIterable<string>;
     append(messages: Array<{
+        role: string;
         type: string;
-        value: string | File;
+        content: string | File;
     }>): Promise<void>;
     destroy(): void;
 }

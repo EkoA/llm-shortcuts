@@ -1627,3 +1627,247 @@ button[type="submit"]:disabled:hover {
         text-align: center;
     }
 }
+
+/* Fallback UI Styles */
+.fallback-ui {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.fallback-overlay {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: 20px;
+}
+
+.fallback-content {
+    padding: 30px;
+}
+
+.fallback-header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 20px;
+}
+
+.fallback-header h1 {
+    color: #dc2626;
+    font-size: 28px;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.fallback-subtitle {
+    color: #6b7280;
+    font-size: 16px;
+    margin: 0;
+}
+
+.fallback-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.fallback-error h2 {
+    color: #dc2626;
+    font-size: 20px;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.fallback-error p {
+    color: #374151;
+    margin: 0 0 15px 0;
+    line-height: 1.5;
+}
+
+.fallback-error details {
+    margin-top: 15px;
+}
+
+.fallback-error summary {
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.fallback-error pre {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 12px;
+    color: #374151;
+    overflow-x: auto;
+    margin-top: 10px;
+}
+
+.fallback-recovery {
+    margin-bottom: 30px;
+}
+
+.fallback-recovery h3 {
+    color: #374151;
+    font-size: 18px;
+    margin: 0 0 20px 0;
+    font-weight: 600;
+}
+
+.recovery-options {
+    display: grid;
+    gap: 15px;
+}
+
+.recovery-option {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.recovery-option:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.recovery-option.destructive {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.recovery-option.destructive:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.recovery-option h4 {
+    color: #374151;
+    font-size: 16px;
+    margin: 0 0 8px 0;
+    font-weight: 600;
+}
+
+.recovery-option p {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0 0 15px 0;
+    line-height: 1.4;
+}
+
+.fallback-actions {
+    margin-bottom: 30px;
+}
+
+.fallback-actions h3 {
+    color: #374151;
+    font-size: 18px;
+    margin: 0 0 20px 0;
+    font-weight: 600;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.fallback-footer {
+    text-align: center;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 20px;
+}
+
+.fallback-footer p {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Fallback UI Button styles */
+.fallback-ui .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 36px;
+}
+
+.fallback-ui .btn-primary {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.fallback-ui .btn-primary:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.fallback-ui .btn-secondary {
+    background: white;
+    color: #374151;
+    border-color: #d1d5db;
+}
+
+.fallback-ui .btn-secondary:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.fallback-ui .btn-danger {
+    background: #dc2626;
+    color: white;
+    border-color: #dc2626;
+}
+
+.fallback-ui .btn-danger:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+/* Fallback UI Responsive design */
+@media (max-width: 640px) {
+    .fallback-content {
+        padding: 20px;
+    }
+
+    .fallback-header h1 {
+        font-size: 24px;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .fallback-ui .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

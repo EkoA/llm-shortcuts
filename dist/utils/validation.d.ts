@@ -63,6 +63,29 @@ export declare function validateUpdateRecipeData(data: UpdateRecipeData): Recipe
  */
 export declare function sanitizeUserInput(input: string): string;
 /**
+ * Validate edge cases for text input
+ */
+export declare function validateEdgeCases(text: string, fieldName: string): {
+    isValid: boolean;
+    error?: string;
+    warning?: string;
+};
+/**
+ * Validate prompt length and complexity
+ */
+export declare function validatePromptComplexity(prompt: string): {
+    isValid: boolean;
+    error?: string;
+    warning?: string;
+};
+/**
+ * Validate input for potential security issues
+ */
+export declare function validateSecurityInput(input: string): {
+    isValid: boolean;
+    error?: string;
+};
+/**
  * Validate search options
  */
 export declare function validateSearchOptions(options: any): {

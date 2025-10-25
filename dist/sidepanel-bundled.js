@@ -81,6 +81,7 @@ function generateSessionId() {
  * Data validation utilities
  * Provides validation logic for recipes and other data structures
  */
+// Validation utilities don't need error handler imports
 /**
  * Validation error types
  */
@@ -102,7 +103,12 @@ const VALIDATION_LIMITS = {
     PROMPT_MIN_LENGTH: 1,
     PROMPT_MAX_LENGTH: 10000,
     TAG_MAX_LENGTH: 50,
-    MAX_TAGS: 10
+    MAX_TAGS: 10,
+    // Edge case limits
+    MAX_SPECIAL_CHARS_RATIO: 0.3, // Max 30% special characters
+    MAX_CONSECUTIVE_SPECIAL: 3, // Max 3 consecutive special characters
+    MAX_EMPTY_LINES: 5, // Max 5 consecutive empty lines
+    MAX_REPEATED_CHARS: 5 // Max 5 consecutive repeated characters
 };
 /**
  * Validate a recipe name
@@ -339,6 +345,173 @@ function sanitizeUserInput(input) {
         .trim();
 }
 /**
+ * Validate edge cases for text input
+ */
+function validateEdgeCases(text, fieldName) {
+    if (!text || typeof text !== 'string') {
+        return { isValid: false, error: `${fieldName} is required` };
+    }
+    const trimmedText = text.trim();
+    // Check for empty or whitespace-only input
+    if (trimmedText.length === 0) {
+        return { isValid: false, error: `${fieldName} cannot be empty` };
+    }
+    // Check for excessive special characters
+    const specialCharCount = (trimmedText.match(/[^a-zA-Z0-9\s]/g) || []).length;
+    const specialCharRatio = specialCharCount / trimmedText.length;
+    if (specialCharRatio > VALIDATION_LIMITS.MAX_SPECIAL_CHARS_RATIO) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many special characters (${Math.round(specialCharRatio * 100)}%)`
+        };
+    }
+    // Check for excessive consecutive special characters
+    const consecutiveSpecial = trimmedText.match(/[^a-zA-Z0-9\s]{4,}/g);
+    if (consecutiveSpecial) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many consecutive special characters`
+        };
+    }
+    // Check for excessive repeated characters
+    const repeatedChars = trimmedText.match(/(.)\1{4,}/g);
+    if (repeatedChars) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many repeated characters`
+        };
+    }
+    // Check for excessive empty lines
+    const emptyLines = trimmedText.split('\n').filter(line => line.trim().length === 0).length;
+    if (emptyLines > VALIDATION_LIMITS.MAX_EMPTY_LINES) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains too many empty lines`
+        };
+    }
+    // Check for potential prompt injection patterns
+    const injectionPatterns = [
+        /ignore\s+previous\s+instructions/gi,
+        /forget\s+everything/gi,
+        /you\s+are\s+now/gi,
+        /system\s+prompt/gi,
+        /act\s+as\s+if/gi
+    ];
+    for (const pattern of injectionPatterns) {
+        if (pattern.test(trimmedText)) {
+            return {
+                isValid: false,
+                error: `${fieldName} contains potentially malicious content`
+            };
+        }
+    }
+    // Check for very long single words (potential data dumps)
+    const words = trimmedText.split(/\s+/);
+    const longWords = words.filter(word => word.length > 50);
+    if (longWords.length > 0) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains unusually long words (${longWords.length} found)`
+        };
+    }
+    // Check for excessive repetition of the same word
+    const wordCounts = {};
+    words.forEach(word => {
+        const normalizedWord = word.toLowerCase();
+        wordCounts[normalizedWord] = (wordCounts[normalizedWord] || 0) + 1;
+    });
+    const maxWordCount = Math.max(...Object.values(wordCounts));
+    if (maxWordCount > words.length * 0.5) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains excessive repetition of the same word`
+        };
+    }
+    // Check for potential encoding issues
+    const encodingIssues = trimmedText.match(/[^\x00-\x7F]/g);
+    if (encodingIssues && encodingIssues.length > trimmedText.length * 0.1) {
+        return {
+            isValid: false,
+            error: `${fieldName} contains unusual characters that may cause encoding issues`
+        };
+    }
+    return { isValid: true };
+}
+/**
+ * Validate prompt length and complexity
+ */
+function validatePromptComplexity(prompt) {
+    if (!prompt || typeof prompt !== 'string') {
+        return { isValid: false, error: 'Prompt is required' };
+    }
+    const trimmedPrompt = prompt.trim();
+    // Check basic length
+    if (trimmedPrompt.length < VALIDATION_LIMITS.PROMPT_MIN_LENGTH) {
+        return { isValid: false, error: 'Prompt must be at least 1 character long' };
+    }
+    if (trimmedPrompt.length > VALIDATION_LIMITS.PROMPT_MAX_LENGTH) {
+        return { isValid: false, error: `Prompt must be no more than ${VALIDATION_LIMITS.PROMPT_MAX_LENGTH} characters long` };
+    }
+    // Check for edge cases
+    const edgeCaseResult = validateEdgeCases(trimmedPrompt, 'Prompt');
+    if (!edgeCaseResult.isValid) {
+        return edgeCaseResult;
+    }
+    // Check for prompt engineering best practices
+    const warnings = [];
+    // Check for placeholder usage
+    if (!trimmedPrompt.includes('{user_input}') && !trimmedPrompt.includes('{input}') && !trimmedPrompt.includes('{text}')) {
+        warnings.push('Consider adding a placeholder like {user_input} for dynamic content');
+    }
+    // Check for clear instructions
+    const instructionWords = ['please', 'analyze', 'summarize', 'explain', 'create', 'write', 'generate'];
+    const hasInstructions = instructionWords.some(word => trimmedPrompt.toLowerCase().includes(word));
+    if (!hasInstructions) {
+        warnings.push('Consider adding clear instructions for better AI responses');
+    }
+    // Check for context
+    if (trimmedPrompt.length < 20) {
+        warnings.push('Very short prompts may not provide enough context for good results');
+    }
+    return {
+        isValid: true,
+        ...(warnings.length > 0 && { warning: warnings.join('; ') })
+    };
+}
+/**
+ * Validate input for potential security issues
+ */
+function validateSecurityInput(input) {
+    if (!input || typeof input !== 'string') {
+        return { isValid: false, error: 'Input is required' };
+    }
+    const trimmedInput = input.trim();
+    // Check for script injection patterns
+    const scriptPatterns = [
+        /<script[^>]*>/gi,
+        /javascript:/gi,
+        /vbscript:/gi,
+        /on\w+\s*=/gi,
+        /eval\s*\(/gi,
+        /function\s*\(/gi
+    ];
+    for (const pattern of scriptPatterns) {
+        if (pattern.test(trimmedInput)) {
+            return { isValid: false, error: 'Input contains potentially malicious script content' };
+        }
+    }
+    // Check for data URI patterns
+    if (/data:/gi.test(trimmedInput)) {
+        return { isValid: false, error: 'Input contains data URI which may be unsafe' };
+    }
+    // Check for excessive URL patterns
+    const urlCount = (trimmedInput.match(/https?:\/\/[^\s]+/g) || []).length;
+    if (urlCount > 5) {
+        return { isValid: false, error: 'Input contains too many URLs' };
+    }
+    return { isValid: true };
+}
+/**
  * Validate search options
  */
 function validateSearchOptions(options) {
@@ -399,6 +572,8 @@ function validateSearchOptions(options) {
  * Prompt Interpolation Utility
  * Handles replacement of placeholders in prompt templates with user input
  */
+
+
 /**
  * Error types for prompt interpolation
  */
@@ -451,10 +626,20 @@ function sanitizeInput(input, options = {}) {
 function interpolatePrompt(template, userInput, options = {}, guide) {
     try {
         if (!template || typeof template !== 'string') {
-            throw new PromptInterpolationError('Invalid prompt template', 'INVALID_TEMPLATE');
+            throw new AppError('Invalid prompt template', 'INVALID_TEMPLATE', ErrorCategory.VALIDATION, ErrorSeverity.LOW, undefined, false, 'Please provide a valid prompt template.');
         }
         if (typeof userInput !== 'string') {
-            throw new PromptInterpolationError('User input must be a string', 'INVALID_INPUT');
+            throw new AppError('User input must be a string', 'INVALID_INPUT', ErrorCategory.VALIDATION, ErrorSeverity.LOW, undefined, false, 'Please provide valid user input.');
+        }
+        // Validate security of user input
+        const securityValidation = validateSecurityInput(userInput);
+        if (!securityValidation.isValid) {
+            throw new AppError(securityValidation.error, 'SECURITY_VALIDATION_FAILED', ErrorCategory.VALIDATION, ErrorSeverity.HIGH, undefined, false, 'Input contains potentially unsafe content.');
+        }
+        // Validate edge cases
+        const edgeCaseValidation = validateEdgeCases(userInput, 'User input');
+        if (!edgeCaseValidation.isValid) {
+            throw new AppError(edgeCaseValidation.error, 'EDGE_CASE_VALIDATION_FAILED', ErrorCategory.VALIDATION, ErrorSeverity.MEDIUM, undefined, false, 'Input contains unusual patterns that may cause issues.');
         }
         // Sanitize user input
         const sanitizedInput = sanitizeInput(userInput, options);
@@ -472,7 +657,8 @@ function interpolatePrompt(template, userInput, options = {}, guide) {
         }
         // CRITICAL: If no placeholders were found and replaced, append the user input
         // This ensures user input is always included even if the template has no placeholders
-        if (interpolated === template) {
+        // BUT: Only append if user input is not empty (for image-only recipes)
+        if (interpolated === template && sanitizedInput.trim().length > 0) {
             // No placeholders were replaced, so append the user input
             interpolated = template + ' ' + sanitizedInput;
         }
@@ -578,6 +764,7 @@ function previewInterpolation(template, userInput, options = {}) {
  * Chrome Storage API wrapper
  * Provides a clean async/await interface for Chrome extension storage operations
  */
+
 /**
  * Storage error types
  */
@@ -630,7 +817,9 @@ class StorageService {
             return this.validateAndMigrateData(data);
         }
         catch (error) {
-            throw new StorageError('Failed to retrieve data from storage', 'GET_DATA_FAILED', error);
+            errorHandler.handleError(error, 'Storage get data');
+            throw new AppError('Failed to retrieve data from storage', 'GET_DATA_FAILED', ErrorCategory.STORAGE, ErrorSeverity.HIGH, error, true, // retryable
+            'Failed to load data. Please try again.');
         }
     }
     /**
@@ -793,6 +982,56 @@ class StorageService {
         await this.saveAllData(data);
     }
     /**
+     * Get onboarding state from storage
+     */
+    async getOnboardingState() {
+        const data = await this.getAllData();
+        return data.onboarding || {
+            completed: false,
+            currentStep: 0,
+            totalSteps: 5,
+            showAgain: true
+        };
+    }
+    /**
+     * Update onboarding state in storage
+     */
+    async updateOnboardingState(onboarding) {
+        const data = await this.getAllData();
+        data.onboarding = onboarding;
+        await this.saveAllData(data);
+    }
+    /**
+     * Mark onboarding as completed
+     */
+    async completeOnboarding() {
+        const data = await this.getAllData();
+        if (!data.onboarding) {
+            data.onboarding = {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            };
+        }
+        data.onboarding.completed = true;
+        data.onboarding.completedAt = Date.now();
+        await this.saveAllData(data);
+    }
+    /**
+     * Reset onboarding state
+     */
+    async resetOnboarding() {
+        const data = await this.getAllData();
+        data.onboarding = {
+            completed: false,
+            currentStep: 0,
+            totalSteps: 5,
+            showAgain: true
+        };
+        await this.saveAllData(data);
+    }
+    /**
      * Get default storage schema
      */
     getDefaultSchema() {
@@ -801,7 +1040,13 @@ class StorageService {
                 version: this.STORAGE_VERSION,
                 lastUpdated: Date.now()
             },
-            recipes: []
+            recipes: [],
+            onboarding: {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            }
         };
     }
     /**
@@ -823,6 +1068,15 @@ class StorageService {
         // Ensure recipes array exists
         if (!Array.isArray(data.recipes)) {
             data.recipes = [];
+        }
+        // Ensure onboarding state exists
+        if (!data.onboarding) {
+            data.onboarding = {
+                completed: false,
+                currentStep: 0,
+                totalSteps: 5,
+                showAgain: true
+            };
         }
         // Migrate data if version is different
         if (data.version.version !== this.STORAGE_VERSION) {
@@ -1286,6 +1540,7 @@ const getRecipeManager = () => RecipeManager.getInstance();
  * Chrome Built-in AI Prompt API wrapper
  * Provides a clean interface for interacting with Chrome's on-device AI model
  */
+
 /**
  * Error types for AI API operations
  */
@@ -1384,9 +1639,9 @@ class AIClient {
             }
         }
         catch (error) {
-            const aiError = new AIError('Failed to initialize AI client', 'INITIALIZATION_FAILED', error);
-            console.error('AI Client initialization failed:', aiError);
-            throw aiError;
+            errorHandler.handleError(error, 'AI Client initialization');
+            throw new AppError('Failed to initialize AI client', 'INITIALIZATION_FAILED', ErrorCategory.AI_API, ErrorSeverity.CRITICAL, error, true, // retryable
+            'AI initialization failed. Please check your Chrome settings and try again.');
         }
     }
     /**
@@ -1447,10 +1702,11 @@ class AIClient {
         }
         catch (error) {
             session.destroy();
-            if (error instanceof AIError) {
+            if (error instanceof AppError) {
                 throw error;
             }
-            throw new AIError('Failed to execute prompt', 'PROMPT_EXECUTION_FAILED', error);
+            throw new AppError('Failed to execute prompt', 'PROMPT_EXECUTION_FAILED', ErrorCategory.AI_API, ErrorSeverity.HIGH, error, true, // retryable
+            'Failed to execute prompt. Please try again.');
         }
     }
     /**
@@ -1481,10 +1737,10 @@ class AIClient {
         try {
             // Append multimodal content to session
             const messages = [
-                { type: 'text', value: textPrompt }
+                { role: 'user', type: 'text', content: textPrompt }
             ];
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
             await session.append(messages);
             // Get response using prompt method
@@ -1508,10 +1764,10 @@ class AIClient {
         try {
             // Append multimodal content to session
             const messages = [
-                { type: 'text', value: textPrompt }
+                { role: 'user', type: 'text', content: textPrompt }
             ];
             if (imageFile) {
-                messages.push({ type: 'image', value: imageFile });
+                messages.push({ role: 'user', type: 'image', content: imageFile });
             }
             await session.append(messages);
             // Get streaming response
@@ -1711,6 +1967,7 @@ if (typeof window !== 'undefined') {
  */
 
 
+
 /**
  * Error types for prompt execution
  */
@@ -1750,21 +2007,22 @@ class PromptExecutor {
         try {
             // Validate inputs
             if (!recipe || !userInput) {
-                throw new PromptExecutorError('Recipe and user input are required', 'INVALID_INPUTS');
+                throw new AppError('Recipe and user input are required', 'INVALID_INPUTS', ErrorCategory.VALIDATION, ErrorSeverity.LOW, undefined, false, 'Please provide both a recipe and user input.');
             }
             // Check if AI client is available
             if (!(await this.aiClient.isAvailable())) {
-                throw new PromptExecutorError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE');
+                throw new AppError('AI client is not available. Please ensure Chrome AI API is enabled.', 'AI_CLIENT_NOT_AVAILABLE', ErrorCategory.AI_API, ErrorSeverity.CRITICAL, undefined, true, 'AI features are not available. Please check your Chrome settings.');
             }
             // Interpolate prompt with user input
             const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, options.sanitization);
             console.log('Executing recipe:', recipe.name);
             console.log('Interpolated prompt:', interpolatedPrompt);
-            // Execute prompt
-            const response = await this.aiClient.executePrompt(interpolatedPrompt, {
+            // Execute prompt with retry logic and timeout
+            const response = await handleWithRetry(() => handleWithTimeout(() => this.aiClient.executePrompt(interpolatedPrompt, {
                 temperature: options.temperature ?? 0.7,
                 topK: options.topK ?? 40
-            });
+            }), options.timeout ?? 30000, // 30 second timeout
+            'Recipe execution'), 'Recipe execution');
             const executionTime = Date.now() - startTime;
             const result = {
                 success: true,
@@ -1786,7 +2044,10 @@ class PromptExecutor {
             // Store failed execution
             this.executionHistory.set(sessionId, result);
             console.error('Recipe execution failed:', error);
-            throw new PromptExecutorError('Failed to execute recipe', 'EXECUTION_FAILED', error);
+            if (error instanceof AppError) {
+                throw error;
+            }
+            throw new AppError('Failed to execute recipe', 'EXECUTION_FAILED', ErrorCategory.AI_API, ErrorSeverity.HIGH, error, true, 'Failed to execute recipe. Please try again.');
         }
     }
     /**
@@ -2376,6 +2637,10 @@ let formValidationState = {};
 let isEnhancing = false;
 let currentEnhancement = null;
 let userGuide = '';
+// Onboarding state
+let onboardingState = null;
+let currentOnboardingStep = 1;
+const totalOnboardingSteps = 5;
 // Response history state
 let responseHistory = new Map();
 let currentHistoryIndex = -1;
@@ -2387,6 +2652,24 @@ let streamingAnimationFrame = null;
  */
 async function initialize() {
     console.log('Initializing LLM Shortcuts side panel');
+    // Setup global error handling
+    if (typeof setupGlobalErrorHandling === 'function') {
+        setupGlobalErrorHandling();
+    }
+    // Perform security audit
+    if (typeof performSecurityAudit === 'function') {
+        try {
+            const auditResult = await performSecurityAudit();
+            if (!auditResult.isSecure) {
+                console.warn('Security vulnerabilities detected:', auditResult.vulnerabilities);
+                const report = generateSecurityReport(auditResult);
+                console.log('Security Report:', report);
+            }
+        }
+        catch (error) {
+            console.error('Security audit failed:', error);
+        }
+    }
     // Initialize recipe manager
     recipeManager = new RecipeManager();
     // Initialize prompt executor
@@ -2408,6 +2691,8 @@ async function initialize() {
     await loadInitialState();
     // Load user guide
     await loadGuide();
+    // Check if onboarding should be shown
+    await checkAndShowOnboarding();
 }
 /**
  * Check if Chrome AI API is available directly in sidepanel
@@ -2493,6 +2778,9 @@ function setupEventListeners() {
     closeEnhancementBtn?.addEventListener('click', hideEnhancementUI);
     acceptEnhancementBtn?.addEventListener('click', acceptEnhancement);
     rejectEnhancementBtn?.addEventListener('click', rejectEnhancement);
+    // Tutorial button
+    const showTutorialBtn = document.getElementById('show-tutorial-btn');
+    showTutorialBtn?.addEventListener('click', showTutorial);
     // Guide management
     const toggleGuideBtn = document.getElementById('toggle-guide-btn');
     const closeGuideModalBtn = document.getElementById('close-guide-modal');
@@ -2506,6 +2794,17 @@ function setupEventListeners() {
     guideContentInput?.addEventListener('input', updateGuideCharCount);
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
+    // Onboarding event listeners
+    const closeOnboardingBtn = document.getElementById('close-onboarding-modal');
+    const onboardingSkipBtn = document.getElementById('onboarding-skip');
+    const onboardingPrevBtn = document.getElementById('onboarding-prev');
+    const onboardingNextBtn = document.getElementById('onboarding-next');
+    const onboardingCompleteBtn = document.getElementById('onboarding-complete');
+    closeOnboardingBtn?.addEventListener('click', hideOnboardingModal);
+    onboardingSkipBtn?.addEventListener('click', skipOnboarding);
+    onboardingPrevBtn?.addEventListener('click', previousOnboardingStep);
+    onboardingNextBtn?.addEventListener('click', nextOnboardingStep);
+    onboardingCompleteBtn?.addEventListener('click', completeOnboarding);
 }
 /**
  * Load initial state
@@ -2721,11 +3020,40 @@ async function executeWithStreaming(recipe, userInput, imageFile) {
     try {
         console.log('Executing recipe with streaming:', recipe.name);
         // Use proper prompt interpolation with sanitization and guide
-        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
-            maxLength: 10000,
-            allowHtml: false,
-            escapeSpecialChars: true
-        }, userGuide);
+        let interpolatedPrompt;
+        if (userInput.trim().length > 0) {
+            // Text input provided - use normal interpolation
+            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+                maxLength: 10000,
+                allowHtml: false,
+                escapeSpecialChars: true
+            }, userGuide);
+        }
+        else if (imageFile) {
+            // Image-only input - modify prompt to work with images
+            let imagePrompt = recipe.prompt;
+            // If the prompt contains text input placeholders, modify it for image input
+            if (imagePrompt.includes('{user_input}') || imagePrompt.includes('{userInput}') ||
+                imagePrompt.includes('{input}') || imagePrompt.includes('{text}') ||
+                imagePrompt.includes('{content}')) {
+                // Replace text input placeholders with image instruction
+                imagePrompt = imagePrompt
+                    .replace(/\{user_input\}/g, 'the content in the provided image')
+                    .replace(/\{userInput\}/g, 'the content in the provided image')
+                    .replace(/\{input\}/g, 'the content in the provided image')
+                    .replace(/\{text\}/g, 'the content in the provided image')
+                    .replace(/\{content\}/g, 'the content in the provided image');
+            }
+            else {
+                // If no placeholders, append instruction to work with the image
+                imagePrompt += ' Please analyze the provided image and work with its content.';
+            }
+            interpolatedPrompt = imagePrompt + (userGuide ? '\n\n' + userGuide : '');
+        }
+        else {
+            // No input provided - use original prompt
+            interpolatedPrompt = recipe.prompt + (userGuide ? '\n\n' + userGuide : '');
+        }
         // Log image file if provided
         if (imageFile) {
             console.log('Image file provided:', imageFile.name, imageFile.size, 'bytes');
@@ -2751,10 +3079,10 @@ async function executeWithStreaming(recipe, userInput, imageFile) {
                 console.log('Using multimodal execution with image');
                 // Append multimodal content to session
                 const messages = [
-                    { type: 'text', value: interpolatedPrompt }
+                    { role: 'user', type: 'text', content: interpolatedPrompt }
                 ];
                 if (imageFile) {
-                    messages.push({ type: 'image', value: imageFile });
+                    messages.push({ role: 'user', type: 'image', content: imageFile });
                 }
                 await session.append(messages);
                 // Execute streaming prompt
@@ -2804,11 +3132,40 @@ async function executeWithContentScript(recipe, userInput, imageFile) {
     try {
         console.log('Executing recipe via direct AI access:', recipe.name);
         // Use proper prompt interpolation with sanitization and guide
-        const interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
-            maxLength: 10000,
-            allowHtml: false,
-            escapeSpecialChars: true
-        }, userGuide);
+        let interpolatedPrompt;
+        if (userInput.trim().length > 0) {
+            // Text input provided - use normal interpolation
+            interpolatedPrompt = interpolatePrompt(recipe.prompt, userInput, {
+                maxLength: 10000,
+                allowHtml: false,
+                escapeSpecialChars: true
+            }, userGuide);
+        }
+        else if (imageFile) {
+            // Image-only input - modify prompt to work with images
+            let imagePrompt = recipe.prompt;
+            // If the prompt contains text input placeholders, modify it for image input
+            if (imagePrompt.includes('{user_input}') || imagePrompt.includes('{userInput}') ||
+                imagePrompt.includes('{input}') || imagePrompt.includes('{text}') ||
+                imagePrompt.includes('{content}')) {
+                // Replace text input placeholders with image instruction
+                imagePrompt = imagePrompt
+                    .replace(/\{user_input\}/g, 'the content in the provided image')
+                    .replace(/\{userInput\}/g, 'the content in the provided image')
+                    .replace(/\{input\}/g, 'the content in the provided image')
+                    .replace(/\{text\}/g, 'the content in the provided image')
+                    .replace(/\{content\}/g, 'the content in the provided image');
+            }
+            else {
+                // If no placeholders, append instruction to work with the image
+                imagePrompt += ' Please analyze the provided image and work with its content.';
+            }
+            interpolatedPrompt = imagePrompt + (userGuide ? '\n\n' + userGuide : '');
+        }
+        else {
+            // No input provided - use original prompt
+            interpolatedPrompt = recipe.prompt + (userGuide ? '\n\n' + userGuide : '');
+        }
         // Log image file if provided (for future implementation)
         if (imageFile) {
             console.log('Image file provided:', imageFile.name, imageFile.size, 'bytes');
@@ -2832,10 +3189,10 @@ async function executeWithContentScript(recipe, userInput, imageFile) {
                 console.log('Using multimodal execution with image (fallback)');
                 // Append multimodal content to session
                 const messages = [
-                    { type: 'text', value: interpolatedPrompt }
+                    { role: 'user', type: 'text', content: interpolatedPrompt }
                 ];
                 if (imageFile) {
-                    messages.push({ type: 'image', value: imageFile });
+                    messages.push({ role: 'user', type: 'image', content: imageFile });
                 }
                 await session.append(messages);
                 // Execute prompt
@@ -4311,6 +4668,22 @@ function handleKeyboardShortcuts(event) {
                 showShortcutsHelp();
             }
             break;
+        case 'arrowleft':
+            // Check if onboarding modal is open
+            const onboardingModal = document.getElementById('onboarding-modal');
+            if (onboardingModal && onboardingModal.style.display !== 'none') {
+                event.preventDefault();
+                previousOnboardingStep();
+            }
+            break;
+        case 'arrowright':
+            // Check if onboarding modal is open
+            const onboardingModalRight = document.getElementById('onboarding-modal');
+            if (onboardingModalRight && onboardingModalRight.style.display !== 'none') {
+                event.preventDefault();
+                nextOnboardingStep();
+            }
+            break;
     }
 }
 /**
@@ -4335,6 +4708,12 @@ function handleEscapeKey() {
     const shortcutsHelp = document.getElementById('shortcuts-help');
     if (shortcutsHelp && shortcutsHelp.classList.contains('show')) {
         hideShortcutsHelp();
+        return;
+    }
+    // If onboarding modal is open, close it
+    const onboardingModal = document.getElementById('onboarding-modal');
+    if (onboardingModal && onboardingModal.style.display !== 'none') {
+        hideOnboardingModal();
         return;
     }
     // If guide modal is open, close it
@@ -4577,6 +4956,192 @@ function updateGuideButtonState() {
     else {
         toggleGuideBtn.classList.remove('active');
         toggleGuideBtn.title = 'Set Guide';
+    }
+}
+/**
+ * Check if onboarding should be shown
+ */
+async function checkAndShowOnboarding() {
+    try {
+        if (!storageService) {
+            console.warn('Storage service not available for onboarding check');
+            return;
+        }
+        onboardingState = await storageService.getOnboardingState();
+        console.log('Onboarding state:', onboardingState);
+        // Show onboarding if not completed or if user wants to see it again
+        if (!onboardingState.completed || onboardingState.showAgain) {
+            currentOnboardingStep = onboardingState.currentStep || 1;
+            showOnboardingModal();
+        }
+    }
+    catch (error) {
+        console.error('Failed to check onboarding state:', error);
+        // Show onboarding by default if there's an error
+        showOnboardingModal();
+    }
+}
+/**
+ * Show onboarding modal
+ */
+function showOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal');
+    if (onboardingModal) {
+        onboardingModal.style.display = 'flex';
+        updateOnboardingStep();
+    }
+}
+/**
+ * Hide onboarding modal
+ */
+function hideOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal');
+    if (onboardingModal) {
+        onboardingModal.style.display = 'none';
+    }
+}
+/**
+ * Skip onboarding
+ */
+async function skipOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.completeOnboarding();
+        }
+        hideOnboardingModal();
+    }
+    catch (error) {
+        console.error('Failed to skip onboarding:', error);
+        hideOnboardingModal();
+    }
+}
+/**
+ * Go to previous onboarding step
+ */
+function previousOnboardingStep() {
+    if (currentOnboardingStep > 1) {
+        currentOnboardingStep--;
+        updateOnboardingStep();
+    }
+}
+/**
+ * Go to next onboarding step
+ */
+function nextOnboardingStep() {
+    if (currentOnboardingStep < totalOnboardingSteps) {
+        currentOnboardingStep++;
+        updateOnboardingStep();
+    }
+}
+/**
+ * Complete onboarding
+ */
+async function completeOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.completeOnboarding();
+        }
+        hideOnboardingModal();
+        // Show restart onboarding button
+        showRestartOnboardingButton();
+        // Show success message
+        console.log('Onboarding completed successfully');
+    }
+    catch (error) {
+        console.error('Failed to complete onboarding:', error);
+        hideOnboardingModal();
+    }
+}
+/**
+ * Restart onboarding
+ */
+async function restartOnboarding() {
+    try {
+        if (storageService) {
+            await storageService.resetOnboarding();
+        }
+        currentOnboardingStep = 1;
+        showOnboardingModal();
+    }
+    catch (error) {
+        console.error('Failed to restart onboarding:', error);
+    }
+}
+/**
+ * Show tutorial
+ */
+function showTutorial() {
+    currentOnboardingStep = 1;
+    showOnboardingModal();
+}
+/**
+ * Show restart onboarding button
+ */
+function showRestartOnboardingButton() {
+    const restartBtn = document.getElementById('restart-onboarding-btn');
+    if (restartBtn) {
+        restartBtn.style.display = 'inline-flex';
+    }
+}
+/**
+ * Update onboarding step display
+ */
+function updateOnboardingStep() {
+    // Hide all steps
+    for (let i = 1; i <= totalOnboardingSteps; i++) {
+        const step = document.getElementById(`onboarding-step-${i}`);
+        if (step) {
+            step.style.display = 'none';
+        }
+    }
+    // Show current step
+    const currentStep = document.getElementById(`onboarding-step-${currentOnboardingStep}`);
+    if (currentStep) {
+        currentStep.style.display = 'block';
+    }
+    // Update progress bar
+    const progressFill = document.getElementById('onboarding-progress-fill');
+    if (progressFill) {
+        const progress = (currentOnboardingStep / totalOnboardingSteps) * 100;
+        progressFill.style.width = `${progress}%`;
+    }
+    // Update progress text
+    const progressText = document.getElementById('onboarding-progress-text');
+    if (progressText) {
+        progressText.textContent = `Step ${currentOnboardingStep} of ${totalOnboardingSteps}`;
+    }
+    // Update button visibility
+    const prevBtn = document.getElementById('onboarding-prev');
+    const nextBtn = document.getElementById('onboarding-next');
+    const completeBtn = document.getElementById('onboarding-complete');
+    if (prevBtn) {
+        prevBtn.style.display = currentOnboardingStep > 1 ? 'inline-flex' : 'none';
+    }
+    if (nextBtn && completeBtn) {
+        if (currentOnboardingStep === totalOnboardingSteps) {
+            nextBtn.style.display = 'none';
+            completeBtn.style.display = 'inline-flex';
+        }
+        else {
+            nextBtn.style.display = 'inline-flex';
+            completeBtn.style.display = 'none';
+        }
+    }
+    // Update onboarding state in storage
+    updateOnboardingStateInStorage();
+}
+/**
+ * Update onboarding state in storage
+ */
+async function updateOnboardingStateInStorage() {
+    try {
+        if (storageService && onboardingState) {
+            onboardingState.currentStep = currentOnboardingStep;
+            await storageService.updateOnboardingState(onboardingState);
+        }
+    }
+    catch (error) {
+        console.error('Failed to update onboarding state:', error);
     }
 }
 // Make functions globally available for onclick handlers
