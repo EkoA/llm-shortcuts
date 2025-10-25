@@ -129,6 +129,7 @@ LLM Shortcuts provides a powerful set of features to streamline your AI workflow
 Recipes are reusable AI prompt templates that you create once and use repeatedly. Instead of typing the same prompts over and over, you create a "recipe" with placeholders for dynamic content.
 
 ![Recipe creation][Recipe creation]
+
 [Recipe creation]: https://github.com/EkoA/llm-shortcuts/blob/main/images/recipe-creation.png "Recipe creation"
 
 **How to Create a Recipe:**
@@ -151,6 +152,7 @@ Input Type: Text
 ### ⚡ Recipe Execution
 
 ![Recipe execution][Recipe execution]
+
 [Recipe execution]: https://github.com/EkoA/llm-shortcuts/blob/main/images/recipe-execution.png "Recipe execution"
 
 **How to Use Recipes:**
@@ -166,6 +168,7 @@ Input Type: Text
 Guides are persistent context that gets automatically added to every recipe execution. Think of it as your personal AI assistant preferences that apply to all your recipes.
 
 ![Guides feature][Guides feature]
+
 [Guides feature]: https://github.com/EkoA/llm-shortcuts/blob/main/images/guides-feature.png "Guides feature"
 
 **How to Set a Guide:**
@@ -186,6 +189,7 @@ When explaining code, use technical terms and provide practical examples.
 
 ### 🔍 Recipe Management
 ![Manage recipes][Manage recipes]
+
 [Manage recipes]: https://github.com/EkoA/llm-shortcuts/blob/main/images/manage-recipe.png "Manage recipes"
 
 **Recipe List Features:**
