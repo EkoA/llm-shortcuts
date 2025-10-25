@@ -2,6 +2,8 @@
 
 A Chrome extension that enables users to create reusable LLM prompt templates ("recipes"), eliminating repetitive prompt engineering and context switching across AI chat sessions.
 
+[Demo video](https://www.youtube.com/watch?v=JBExXZRuPGk)
+
 ## 🚀 Quick Start Guide
 
 Follow these simple steps to get the LLM Shortcuts extension running on your Chrome browser.
@@ -52,8 +54,8 @@ Since this extension uses Chrome's experimental AI features, you need to enable 
 The extension requires a trial token to access Chrome's AI features. You need to:
 
 1. **Get a trial token** from Google's Chrome Extension Developer Program
-   - Visit the [Chrome Extension Developer Program](https://developer.chrome.com/docs/extensions/ai-features/)
-   - Apply for access to AI features
+   - Visit the [Chrome Extension Developer Program](https://developer.chrome.com/origintrials/?hl=en#/view_trial/)
+   - Register for access to AI features
    - Once approved, you'll receive a trial token
 
 2. **Update the manifest.json** file:
@@ -86,19 +88,15 @@ npm run build
 
 1. **Open Chrome** and navigate to `chrome://extensions`
 2. **Enable Developer mode** by toggling the switch in the top-right corner
-   - ![Enable Developer Mode](screenshots/developer-mode.png) <!-- TODO: Add screenshot -->
 3. **Click "Load unpacked"** button
 4. **Select the `dist/` folder** from your project directory
-   - ![Select dist folder](screenshots/select-dist-folder.png) <!-- TODO: Add screenshot -->
 5. **The extension should now appear** in your extensions list
-   - ![Extension loaded](screenshots/extension-loaded.png) <!-- TODO: Add screenshot -->
 
 ### Step 6: Access the Extension
 
 1. **Look for the LLM Shortcuts icon** in your Chrome toolbar
 2. **Click the icon** to open the side panel
 3. **The extension interface should appear** on the right side of your browser
-   - ![Extension side panel](screenshots/side-panel.png) <!-- TODO: Add screenshot -->
 
 ## ✅ Verification
 
@@ -130,13 +128,14 @@ LLM Shortcuts provides a powerful set of features to streamline your AI workflow
 **What are Recipes?**
 Recipes are reusable AI prompt templates that you create once and use repeatedly. Instead of typing the same prompts over and over, you create a "recipe" with placeholders for dynamic content.
 
+[Recipe creation]: https://github.com/EkoA/llm-shortcuts/tree/main/images/recipe-creation.png "Recipe creation"
+
 **How to Create a Recipe:**
 1. **Click "Create Recipe"** in the side panel
 2. **Fill in the details:**
    - **Name**: A descriptive title (e.g., "Email Refiner", "Code Reviewer")
    - **Description**: What this recipe does
-   - **Prompt**: Your AI instruction with placeholders like `{user_input}`
-   - **Input Type**: Choose Text, Image, or Both
+   - **Prompt**: Your AI instruction/prompt
 3. **Enhance Your Prompt**: Click "Enhance Prompt" to automatically improve your prompt using AI
 4. **Save**: Your recipe is stored and ready to use
 
@@ -144,11 +143,13 @@ Recipes are reusable AI prompt templates that you create once and use repeatedly
 ```
 Name: Email Refiner
 Description: Converts draft emails into professional, concise communication
-Prompt: "Rewrite the following email to be more professional and concise while maintaining the core message: {user_input}"
+Prompt: "Rewrite the following email to be more professional and concise while maintaining the core message:"
 Input Type: Text
 ```
 
 ### ⚡ Recipe Execution
+
+[Recipe execution]: https://github.com/EkoA/llm-shortcuts/tree/main/images/recipe-execution.png "Recipe execution"
 
 **How to Use Recipes:**
 1. **Select a Recipe**: Choose from your saved recipes in the main list
@@ -162,8 +163,10 @@ Input Type: Text
 **What are Guides?**
 Guides are persistent context that gets automatically added to every recipe execution. Think of it as your personal AI assistant preferences that apply to all your recipes.
 
+[Guides feature]: https://github.com/EkoA/llm-shortcuts/tree/main/images/guides-feature.png "Guides feature"
+
 **How to Set a Guide:**
-1. **Click "Set Guide"** in the side panel header
+1. **Click settings icon** in the side panel header
 2. **Enter your context** (up to 1000 characters):
    - Your role or profession
    - Preferred response style
@@ -179,6 +182,7 @@ When explaining code, use technical terms and provide practical examples.
 
 
 ### 🔍 Recipe Management
+[Manage recipes]: https://github.com/EkoA/llm-shortcuts/tree/main/images/manage-recipe.png "Manage recipes"
 
 **Recipe List Features:**
 - **Search**: Find recipes quickly by name
@@ -196,24 +200,24 @@ When explaining code, use technical terms and provide practical examples.
 ## 💡 Example Use Cases
 
 ### Email & Communication
-- **Email Refinement**: "Make this email more professional and concise: {user_input}"
-- **Tone Adjustment**: "Rewrite this message to be more friendly: {user_input}"
-- **Meeting Summaries**: "Summarize this meeting transcript: {user_input}"
+- **Email Refinement**: "Make this email more professional and concise:"
+- **Tone Adjustment**: "Rewrite this message to be more friendly:"
+- **Meeting Summaries**: "Summarize this meeting transcript:"
 
 ### Development & Code
-- **Code Review**: "Review this code for bugs and best practices: {user_input}"
-- **Documentation**: "Generate documentation for this function: {user_input}"
-- **Debugging**: "Help me debug this error: {user_input}"
+- **Code Review**: "Review this code for bugs and best practices:"
+- **Documentation**: "Generate documentation for this function:"
+- **Debugging**: "Help me debug this error:"
 
 ### Content Creation
-- **Blog Posts**: "Write a blog post about: {user_input}"
-- **Social Media**: "Create a Twitter thread about: {user_input}"
-- **Product Descriptions**: "Write a product description for: {user_input}"
+- **Blog Posts**: "Write a blog post about:"
+- **Social Media**: "Create a Twitter thread about:"
+- **Product Descriptions**: "Write a product description for:"
 
 ### Learning & Research
-- **Explanations**: "Explain this concept in simple terms: {user_input}"
-- **Study Notes**: "Create study notes from this text: {user_input}"
-- **Question Generation**: "Generate practice questions about: {user_input}"
+- **Explanations**: "Explain this concept in simple terms:"
+- **Study Notes**: "Create study notes from this text:"
+- **Question Generation**: "Generate practice questions about:"
 
 ```
 
