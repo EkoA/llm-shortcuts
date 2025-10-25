@@ -1,35 +1,35 @@
 {
-    "manifest_version": 3,
-    "name": "LLM Shortcuts",
-    "version": "1.0.0",
-    "description": "A Chrome extension that enables developers and users to create reusable LLM prompt templates with predefined inputs.",
-    "permissions": [
-        "storage",
-        "sidePanel",
-        "offscreen"
-    ],
-    "host_permissions": [
-        "<all_urls>"
-    ],
-    "background": {
-        "service_worker": "background.js"
-    },
-    "side_panel": {
-        "default_path": "sidepanel.html"
-    },
-    "action": {
-        "default_title": "Open LLM Shortcuts"
-    },
-    "icons": {
-        "16": "icons/icon16.png",
-        "48": "icons/icon48.png",
-        "128": "icons/icon128.png"
-    },
-    "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self'"
-    },
-    "minimum_chrome_version": "138",
-    "trial_tokens": [
-        "A2sDJh4wtSsRcsNNpgTyordwhkiOML4Xc/Ugk80X3gu0qIInYlPPawKO2nrwvR2rwMmQeMmaZkgE8ZP94MiDDQYAAACPeyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vaGppY29taGljbWprY2RhaWpsZWJna2NoaGZhY2FsaGgiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzVGhpcmRQYXJ0eSI6dHJ1ZX0="
-    ]
+  "manifest_version": 3,
+  "name": "LLM Shortcuts",
+  "version": "1.0.0",
+  "description": "A Chrome extension that enables developers and users to create reusable LLM prompt templates with predefined inputs.",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open LLM Shortcuts"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "minimum_chrome_version": "138",
+  "trial_tokens": [
+    ""
+  ]
 }
